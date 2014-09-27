@@ -7,7 +7,6 @@ using JimBobBennett.JimLib.Collections;
 using JimBobBennett.JimLib.Extensions;
 using JimBobBennett.JimLib.Mvvm;
 using JimBobBennett.JimLib.Xml;
-using Newtonsoft.Json;
 using Xamarin.Forms;
 
 namespace JimBobBennett.RestAndRelaxForPlex.PlexObjects
@@ -20,11 +19,13 @@ namespace JimBobBennett.RestAndRelaxForPlex.PlexObjects
         [NotifyPropertyChangeDependency("Key")]
         [NotifyPropertyChangeDependency("HasImdbLink")]
         [NotifyPropertyChangeDependency("HasTvdbLink")]
+        [NotifyPropertyChangeDependency("HasTmdbLink")]
         [NotifyPropertyChangeDependency("UriSource")]
         [NotifyPropertyChangeDependency("Uri")]
         [NotifyPropertyChangeDependency("SchemeUri")]
         [NotifyPropertyChangeDependency("ImdbId")]
         [NotifyPropertyChangeDependency("TvdbId")]
+        [NotifyPropertyChangeDependency("TmdbId")]
         public string Guid
         {
             get { return _guid; }
@@ -60,12 +61,25 @@ namespace JimBobBennett.RestAndRelaxForPlex.PlexObjects
             }
             else
                 TvdbId = null;
+
+            if (Guid.StartsWith("com.plexapp.agents.themoviedb://"))
+            {
+                var id = Guid.Replace("com.plexapp.agents.themoviedb://", "");
+                var end = id.IndexOf("?", StringComparison.Ordinal);
+                if (end > 1)
+                    id = id.Substring(0, end);
+
+                TmdbId = id;
+            }
+            else
+                TmdbId = null;
         }
 
         public string Title { get; set; }
         public string Summary { get; set; }
         public string Tagline { get; set; }
         public string Art { get; set; }
+        public string OriginallyAvailableAt { get; set; }
 
         [NotifyPropertyChangeDependency("VideoThumb")]
         public string Thumb { get; set; }
@@ -146,6 +160,9 @@ namespace JimBobBennett.RestAndRelaxForPlex.PlexObjects
                 if (HasTvdbLink)
                     return "TheTVDB";
 
+                if (HasTmdbLink)
+                    return "TMDb";
+
                 return null;
             }
         }
@@ -155,10 +172,13 @@ namespace JimBobBennett.RestAndRelaxForPlex.PlexObjects
             get
             {
                 if (HasImdbLink)
-                    return new Uri("http://www.imdb.com/title/" + ImdbId);
+                    return new Uri(string.Format(PlexResources.ImdbTitleUrl, ImdbId));
 
                 if (HasTvdbLink)
-                    return new Uri("http://www.thetvdb.com/?tab=series&id=" + TvdbId);
+                    return new Uri(string.Format(PlexResources.TheTvdbUrl, TvdbId));
+
+                if (HasTmdbLink)
+                    return new Uri(string.Format(PlexResources.TMDbMovieUrl, TmdbId));
 
                 return null;
             }
@@ -166,6 +186,12 @@ namespace JimBobBennett.RestAndRelaxForPlex.PlexObjects
 
         public string ImdbId { get; set; }
         public string TvdbId { get; set; }
+        public string TmdbId { get; set; }
+
+        public bool HasTmdbLink
+        {
+            get { return !TmdbId.IsNullOrEmpty(); }
+        }
 
         public bool HasTvdbLink
         {
@@ -179,7 +205,7 @@ namespace JimBobBennett.RestAndRelaxForPlex.PlexObjects
 
         public Uri SchemeUri
         {
-            get { return !HasImdbLink ? null : new Uri(string.Format("imdb:///title/{0}/", ImdbId)); }
+            get { return !HasImdbLink ? null : new Uri(string.Format(PlexResources.ImdbTitleSchemeUrl, ImdbId)); }
         }
 
         [XmlNameMapping("grandparentTitle")]

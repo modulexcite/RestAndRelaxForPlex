@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using JimBobBennett.RestAndRelaxForPlex.PlexObjects;
@@ -11,6 +12,7 @@ using JimBobBennett.JimLib.Extensions;
 using JimBobBennett.JimLib.Xamarin.Images;
 using JimBobBennett.JimLib.Xamarin.Network;
 using JimBobBennett.JimLib.Xamarin.Timers;
+using JimBobBennett.RestAndRelaxForPlex.TMDbObjects;
 
 namespace JimBobBennett.RestAndRelaxForPlex.Connection
 {
@@ -25,6 +27,7 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
         private readonly IMyPlexConnection _myPlexConnection;
         private readonly ITheTvdbConnection _theTvdbConnection;
         private readonly IImageHelper _imageHelper;
+        private readonly ITMDbConnection _tmdbConnection;
 
         private readonly List<PlexServerConnection> _myPlexServerConnections = new List<PlexServerConnection>(); 
 
@@ -35,13 +38,14 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
 
         public ConnectionManager(ITimer timer, ILocalServerDiscovery localServerDiscovery,
             IRestConnection restConnection, IMyPlexConnection myPlexConnection, 
-            ITheTvdbConnection theTvdbConnection, IImageHelper imageHelper)
+            ITheTvdbConnection theTvdbConnection, IImageHelper imageHelper, ITMDbConnection tmdbConnection)
         {
             _timer = timer;
             _restConnection = restConnection;
             _myPlexConnection = myPlexConnection;
             _theTvdbConnection = theTvdbConnection;
             _imageHelper = imageHelper;
+            _tmdbConnection = tmdbConnection;
 
             _localServerDiscovery = localServerDiscovery;
             _localServerDiscovery.ServerDiscovered += LocalServerDiscoveryOnServerDiscovered;
@@ -171,7 +175,8 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
                                 await connection.ConnectAsync();
                         }
 
-                        await RebuildNowPlaying();
+                        if (connections.Any())
+                            await RebuildNowPlaying();
                         
                         return true;
                     });
@@ -180,11 +185,21 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
 
         public async Task<Video> RefreshVideo(Video video)
         {
-            var connection = (PlexServerConnection)video.PlexServerConnection;
-            await connection.RefreshAsync();
-            await RebuildNowPlaying();
-            return _nowPlaying.FirstOrDefault(v => v.Player.Key == video.Player.Key &&
-                v.PlexServerConnection.MachineIdentifier == video.PlexServerConnection.MachineIdentifier);
+            try
+            {
+                var connection = (PlexServerConnection) video.PlexServerConnection;
+                await connection.RefreshAsync();
+                await RebuildNowPlaying();
+
+                lock (_syncObject)
+                    return _nowPlaying.FirstOrDefault(v => v.Player.Key == video.Player.Key &&
+                                                           v.PlexServerConnection.MachineIdentifier == video.PlexServerConnection.MachineIdentifier);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("Failed to refresh video: " + ex);
+                return null;
+            }
         }
 
         private async Task RebuildNowPlaying()
@@ -200,31 +215,15 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
                     foreach (var video in connection.NowPlaying)
                     {
                         video.PlexServerConnection = connection;
-                        if (nowPlaying.All(v => v.Player.Key != video.Player.Key && 
-                            v.PlexServerConnection.MachineIdentifier != video.PlexServerConnection.MachineIdentifier))
+                        if (!nowPlaying.Any(v => v.Player.Key == video.Player.Key && 
+                            v.PlexServerConnection.MachineIdentifier == video.PlexServerConnection.MachineIdentifier))
                             nowPlaying.Add(video);
                     }
                 }
             }
 
-            foreach (var video in nowPlaying.Where(v => v.Type == VideoType.Episode))
-            {
-                var series = await _theTvdbConnection.GetSeriesForEpisodeAsync(video);
-                if (series != null)
-                {
-                    if (!video.HasImdbLink && video.HasTvdbLink)
-                    {
-                        var episode = series.GetEpisode(video.SeasonNumber, video.EpisodeNumber);
-
-                        if (episode != null && !episode.ImdbId.IsNullOrEmpty())
-                            video.ImdbId = episode.ImdbId;
-                        else if (!series.ImdbId.IsNullOrEmpty())
-                            video.ImdbId = series.ImdbId;
-                    }
-
-                    MergeRoles(video, series);
-                }
-            }
+            await GetSeriesInfoFromTheTvdb(nowPlaying);
+            await GetMovieInfoFromTMDb(nowPlaying);
 
             foreach (var video in nowPlaying.Where(v => !v.Thumb.IsNullOrEmpty() &&
                 v.ThumbImageSource == null))
@@ -245,6 +244,43 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
             }
         }
 
+        private async Task GetMovieInfoFromTMDb(IEnumerable<Video> nowPlaying)
+        {
+            foreach (var video in nowPlaying.Where(v => v.Type == VideoType.Movie))
+            {
+                var movie = await _tmdbConnection.GetMovieAsync(video);
+                if (movie != null)
+                {
+                    if (!video.HasImdbLink && video.HasTmdbLink)
+                        video.ImdbId = movie.ImdbId;
+
+                    MergeRoles(video, movie);
+                }
+            }
+        }
+
+        private async Task GetSeriesInfoFromTheTvdb(IEnumerable<Video> nowPlaying)
+        {
+            foreach (var video in nowPlaying.Where(v => v.Type == VideoType.Episode))
+            {
+                var series = await _theTvdbConnection.GetSeriesForEpisodeAsync(video);
+                if (series != null)
+                {
+                    if (!video.HasImdbLink && video.HasTvdbLink)
+                    {
+                        var episode = series.GetEpisode(video.SeasonNumber, video.EpisodeNumber);
+
+                        if (episode != null && !episode.ImdbId.IsNullOrEmpty())
+                            video.ImdbId = episode.ImdbId;
+                        else if (!series.ImdbId.IsNullOrEmpty())
+                            video.ImdbId = series.ImdbId;
+                    }
+
+                    MergeRoles(video, series);
+                }
+            }
+        }
+
         private static void MergeRoles(Video video, Series series)
         {
             if (series.Actors == null || !series.Actors.Any())
@@ -252,7 +288,7 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
 
             var nextId = video.Roles.Any() ? video.Roles.Max(r => r.Id) + 1 : 1;
 
-            foreach (var actor in series.Actors.Where(a => !video.Roles.Any() || 
+            foreach (var actor in series.Actors.Where(a => !video.Roles.Any() ||
                 video.Roles.All(r => r.RoleName != a.Role && r.Tag != a.Name)))
             {
                 video.Roles.Add(new Role
@@ -264,6 +300,41 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
                 });
 
                 nextId++;
+            }
+        }
+
+        private static void MergeRoles(Video video, Movie movie)
+        {
+            if (movie.Credits == null || movie.Credits.Cast == null || !movie.Credits.Cast.Any())
+                return;
+
+            if (video.Roles == null)
+                video.Roles = new ObservableCollectionEx<Role>();
+
+            var nextId = video.Roles.Any() ? video.Roles.Max(r => r.Id) + 1 : 1;
+
+            foreach (var actor in movie.Credits.Cast.Where(a => !video.Roles.Any() ||
+                video.Roles.All(r => r.RoleName != a.Character && r.Tag != a.Name)))
+            {
+                video.Roles.Add(new Role
+                {
+                    Id = nextId,
+                    RoleName = actor.Character,
+                    Tag = actor.Name,
+                    Thumb = PlexResources.TMDbActorImageRoot + actor.ProfilePath,
+                    ImdbId = actor.Person == null ? null : actor.Person.ImdbId
+                });
+
+                nextId++;
+            }
+
+            foreach (var role in video.Roles.Where(r => r.ImdbId.IsNullOrEmpty()))
+            {
+                var person = movie.Credits.Cast.FirstOrDefault(c => c.Character == role.RoleName &&
+                                                                    c.Name == role.Tag);
+
+                if (person != null)
+                    role.ImdbId = person.Person.ImdbId;
             }
         }
 

@@ -2,16 +2,16 @@
 
 namespace JimBobBennett.RestAndRelaxForPlex.TheTvdbObjects
 {
-    public class TvdbObjectBase
+    public abstract class TvdbObjectBase
     {
         internal const int CurrentVersion = 2;
 
-        public TvdbObjectBase()
+        protected TvdbObjectBase()
         {
             Version = CurrentVersion;
         }
 
-        public int Version { get; set; }
+        public int Version { get; private set; }
 
         public string Id { get; set; }
 

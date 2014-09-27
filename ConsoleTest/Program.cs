@@ -18,7 +18,7 @@ namespace ConsoleTest
 
             var connectionManager = new ConnectionManager(new Timer(), new LocalServerDiscovery(),
                 restConnection, new MyPlexConnection(restConnection), new TheTvdbConnection(restConnection),
-                new ImageHelper(restConnection));
+                new ImageHelper(restConnection), new TMDbConnection(restConnection, TestConstants.TMDbApiKey));
 
             Task.Factory.StartNew(async () =>
                 {
@@ -61,6 +61,7 @@ namespace ConsoleTest
             Console.WriteLine(video.SchemeUri);
             Console.WriteLine("IMDB Id: " + video.ImdbId);
             Console.WriteLine("Tvdbv Id: " + video.TvdbId);
+            Console.WriteLine("TMDb Id: " + video.TmdbId);
             Console.WriteLine(video.Player.State);
 
             if (video.Player.State == PlayerState.Playing)
@@ -68,7 +69,7 @@ namespace ConsoleTest
 
             Console.WriteLine("Cast:");
             foreach (var role in video.Roles)
-                Console.WriteLine(role.RoleName + ": " + role.Tag);
+                Console.WriteLine(role.RoleName + ": " + role.Tag + " - " + role.ImdbUrl + " (" + role.ImdbSchemeUrl + ")");
 
             //Console.WriteLine("Directors");
             //foreach (var director in video.Directors)

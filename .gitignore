@@ -166,3 +166,4 @@ UpgradeLog*.htm
 FakesAssemblies/
 *.nupkg
 *.DotSettings
+/BuildNugetPackage.ps1

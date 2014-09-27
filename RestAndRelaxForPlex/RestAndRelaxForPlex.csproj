@@ -40,7 +40,9 @@
     <Compile Include="Connection\ConnectionManager.cs" />
     <Compile Include="Connection\IConnectionManager.cs" />
     <Compile Include="Connection\ITheTvdbConnection.cs" />
+    <Compile Include="Connection\ITMDbConnection.cs" />
     <Compile Include="Connection\TheTvdbConnection.cs" />
+    <Compile Include="Connection\TMDbConnection.cs" />
     <Compile Include="ContainerRegistration.cs" />
     <Compile Include="Connection\IMyPlexConnection.cs" />
     <Compile Include="Connection\IPlexServerConnection.cs" />
@@ -71,8 +73,16 @@
     <Compile Include="TheTvdbObjects\Actors.cs" />
     <Compile Include="TheTvdbObjects\Data.cs" />
     <Compile Include="TheTvdbObjects\Episode.cs" />
+    <Compile Include="TMDbObjects\MovieSearchResults.cs" />
     <Compile Include="TheTvdbObjects\Series.cs" />
     <Compile Include="TheTvdbObjects\TvdbObjectBase.cs" />
+    <Compile Include="TMDbObjects\Cast.cs" />
+    <Compile Include="TMDbObjects\Credits.cs" />
+    <Compile Include="TMDbObjects\Movie.cs" />
+    <Compile Include="TMDbObjects\Person.cs" />
+    <Compile Include="TMDbObjects\Result.cs" />
+    <Compile Include="TMDbObjects\TMDbObjectBase.cs" />
+    <Compile Include="TMDbObjects\TMDbObjectWithIMDBId.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="app.config" />
