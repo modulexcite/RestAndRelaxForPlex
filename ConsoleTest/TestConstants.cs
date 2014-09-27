@@ -4,5 +4,6 @@
     {
         public const string MyPlexUserName = "";
         public const string MyPlexPassword = "";
+        public const string TMDbApiKey = "";
     }
 }
