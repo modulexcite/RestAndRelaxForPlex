@@ -1,8 +1,8 @@
 ﻿using Newtonsoft.Json;
 
-namespace JimBobBennett.RestAndRelaxForPlex.TMDbObjects
+namespace JimBobBennett.RestAndRelaxForPlex.TmdbObjects
 {
-    public class Movie : TMDbObjectWithIMDBId
+    public class Movie : TmdbObjectWithImdbId
     {
         public Credits Credits { get; set; }
 

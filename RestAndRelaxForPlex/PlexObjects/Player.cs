@@ -20,6 +20,9 @@ namespace JimBobBennett.RestAndRelaxForPlex.PlexObjects
             isUpdated = UpdateValue(() => State, newValue, updatedPropertyNames) | isUpdated;
             isUpdated = UpdateValue(() => Title, newValue, updatedPropertyNames) | isUpdated;
 
+            if (Client == null)
+                Client = new Server();
+            
             isUpdated = Client.UpdateFrom(newValue.Client) | isUpdated;
 
             return isUpdated;

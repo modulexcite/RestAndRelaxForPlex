@@ -29,6 +29,11 @@ namespace JimBobBennett.RestAndRelaxForPlex.PlexObjects
             var isUpdated = UpdateValue(() => PublicAddress, newValue, updatedPropertyNames);
             isUpdated = UpdateValue(() => FriendlyName, newValue, updatedPropertyNames) | isUpdated;
             isUpdated = UpdateValue(() => Platform, newValue, updatedPropertyNames) | isUpdated;
+
+            if (Devices == null) Devices = new ObservableCollectionEx<Device>();
+            if (Videos == null) Videos = new ObservableCollectionEx<Video>();
+            if (Servers == null) Servers = new ObservableCollectionEx<Server>();
+
             isUpdated = Devices.UpdateToMatch(newValue.Devices, r => r.Key, (d1, d2) => d1.UpdateFrom(d2)) | isUpdated;
             isUpdated = Videos.UpdateToMatch(newValue.Videos, r => r.Key, (v1, v2) => v1.UpdateFrom(v2)) | isUpdated;
             isUpdated = Servers.UpdateToMatch(newValue.Servers, r => r.Key, (s1, s2) => s1.UpdateFrom(s2)) | isUpdated;

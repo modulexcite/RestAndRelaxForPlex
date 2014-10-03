@@ -1,8 +1,8 @@
 ﻿using Newtonsoft.Json;
 
-namespace JimBobBennett.RestAndRelaxForPlex.TMDbObjects
+namespace JimBobBennett.RestAndRelaxForPlex.TmdbObjects
 {
-    public class Person : TMDbObjectWithIMDBId
+    public class Person : TmdbObjectWithImdbId
     {
         [JsonProperty("name")]
         public string Name { get; set; }

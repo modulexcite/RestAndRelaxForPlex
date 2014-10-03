@@ -1,8 +1,8 @@
 ﻿using Newtonsoft.Json;
 
-namespace JimBobBennett.RestAndRelaxForPlex.TMDbObjects
+namespace JimBobBennett.RestAndRelaxForPlex.TmdbObjects
 {
-    public abstract class TMDbObjectWithIMDBId : TMDbObjectBase
+    public abstract class TmdbObjectWithImdbId : TmdbObjectBase
     {
         [JsonProperty("imdb_id")]
         public string ImdbId { get; set; }

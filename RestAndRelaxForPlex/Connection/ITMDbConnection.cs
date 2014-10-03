@@ -1,21 +1,19 @@
-using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
-using JimBobBennett.JimLib.Events;
 using JimBobBennett.RestAndRelaxForPlex.PlexObjects;
-using JimBobBennett.RestAndRelaxForPlex.TMDbObjects;
+using JimBobBennett.RestAndRelaxForPlex.TmdbObjects;
 
 namespace JimBobBennett.RestAndRelaxForPlex.Connection
 {
-    public interface ITMDbConnection
+    public interface ITmdbConnection
     {
-        void AddMovieToCache(Movie movie);
-        void AddPersonToCache(Person person);
-        event EventHandler<EventArgs<Movie>> MovieCacheUpdated;
-        event EventHandler<EventArgs<Person>> PeopleCacheUpdated;
+        Task<Movie> GetMovieAsync(string tmdbId);
+        Task<TvShow> GetTvShowAsync(string tmdbId, int seasonNumber, int episodeNumber);
 
-        Task<Movie> GetMovieAsync(Video video);
-        IEnumerable<Person> CachedPeople { get; }
-        IEnumerable<Movie> CachedMovies { get; }
+        Task<Movie> SearchForMovieAsync(string title, int year, ExternalIds knownIds);
+
+        Task<TvShow> SearchForTvShowAsync(string title, int year, ExternalIds knownSeriesIds,
+            int seasonNumber, int episodeNumber);
+
+        Task<Person> GetPersonAsync(string tmdbId);
     }
 }

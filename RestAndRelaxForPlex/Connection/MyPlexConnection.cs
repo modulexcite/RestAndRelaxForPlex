@@ -86,20 +86,22 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
                 var container = await _restConnection.MakeRequestAsync<MediaContainer, string>(Method.Get,
                     ResponseType.Xml, PlexResources.MyPlexBaseUrl, PlexResources.MyPlexDevices, 
                     headers: PlexHeaders.CreatePlexRequest(User));
-                
-                bool updated;
 
-                lock (_deviceSyncObj)
+                if (container != null && container.ResponseObject != null)
                 {
-                    if (token != _refreshToken)
-                        return;
+                    bool updated;
+                    lock (_deviceSyncObj)
+                    {
+                        if (token != _refreshToken)
+                            return;
 
-                    updated = _devices.UpdateToMatch(container.ResponseObject.Devices, d => d.ClientIdentifier, UpdateDevice);
-                    _servers.UpdateToMatch(GetByProvides(container.ResponseObject, "server"), d => d.ClientIdentifier);
-                    _players.UpdateToMatch(GetByProvides(container.ResponseObject, "player"), d => d.ClientIdentifier);
+                        updated = _devices.UpdateToMatch(container.ResponseObject.Devices, d => d.ClientIdentifier, UpdateDevice);
+                        _servers.UpdateToMatch(GetByProvides(container.ResponseObject, "server"), d => d.ClientIdentifier);
+                        _players.UpdateToMatch(GetByProvides(container.ResponseObject, "player"), d => d.ClientIdentifier);
+                    }
+
+                    if (updated) OnDevicesUpdated();
                 }
-
-                if (updated) OnDevicesUpdated();
             }
             catch
             {

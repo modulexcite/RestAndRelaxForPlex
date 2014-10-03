@@ -1,6 +1,8 @@
+using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Threading.Tasks;
+using JimBobBennett.JimLib.Events;
 using JimBobBennett.RestAndRelaxForPlex.PlexObjects;
 
 namespace JimBobBennett.RestAndRelaxForPlex.Connection
@@ -9,7 +11,9 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
     {
         Device Device { get; }
         string ConnectionUri { get; }
-        bool IsOnLine { get; }
+        ConnectionStatus ConnectionStatus { get; }
+        event EventHandler<EventArgs<ConnectionStatus>> ConnectionStatusChanged;
+ 
         string Platform { get; }
         string MachineIdentifier { get; }
         string Name { get; }

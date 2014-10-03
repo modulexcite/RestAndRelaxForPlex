@@ -1,207 +1,206 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+﻿using System.Linq;
 using System.Threading.Tasks;
-using JimBobBennett.JimLib.Events;
 using JimBobBennett.JimLib.Extensions;
 using JimBobBennett.JimLib.Xamarin.Network;
 using JimBobBennett.RestAndRelaxForPlex.PlexObjects;
-using JimBobBennett.RestAndRelaxForPlex.TMDbObjects;
+using JimBobBennett.RestAndRelaxForPlex.TmdbObjects;
 
 namespace JimBobBennett.RestAndRelaxForPlex.Connection
 {
-    public class TMDbConnection : ITMDbConnection
+    public class TmdbConnection : ITmdbConnection
     {
-        private const int FailedLookupExpiryMinutes = 30;
-        private readonly Dictionary<string, Person> _cachedPeople = new Dictionary<string, Person>();
-        private readonly Dictionary<string, Movie> _cachedMovies = new Dictionary<string, Movie>();
-        private readonly Dictionary<string, Movie> _cachedMoviesByImdb = new Dictionary<string, Movie>();
-
-        public IEnumerable<Person> CachedPeople
-        {
-            get { return _cachedPeople.Values.Select(Person.ClonePerson).ToList(); }
-        }
-
-        public IEnumerable<Movie> CachedMovies
-        {
-            get { return _cachedMovies.Values.Select(Movie.CloneMovie).ToList(); }
-        }
-
-        private readonly Dictionary<string, DateTime> _failedMovies = new Dictionary<string, DateTime>();
-        private readonly Dictionary<string, DateTime> _failedMoviesByImdb = new Dictionary<string, DateTime>(); 
-        
         private readonly IRestConnection _restConnection;
         private readonly string _apiKey;
 
-        public TMDbConnection(IRestConnection restConnection, string apiKey)
+        public TmdbConnection(IRestConnection restConnection, string apiKey)
         {
             _restConnection = restConnection;
             _apiKey = apiKey;
         }
-        
-        public void AddMovieToCache(Movie movie)
-        {
-            if (movie.Version != TMDbObjectBase.CurrentVersion) return;
 
-            _cachedMovies[movie.Id] = movie;
-            _cachedMoviesByImdb[movie.ImdbId] = movie;
-            WeakEventManager.GetWeakEventManager(this).RaiseEvent(this, new EventArgs<Movie>(movie), "MovieCacheUpdated");
+        public async Task<Movie> GetMovieAsync(string tmdbId)
+        {
+            var movie = await LoadMovieAsync(tmdbId);
+            return (movie == null || !await LoadCreditsForMovieAsync(movie)) ? null : movie;
         }
 
-        public void AddPersonToCache(Person person)
+        private async Task<Movie> LoadMovieAsync(string tmdbId, int timeout= 30000)
         {
-            if (person.Version != TMDbObjectBase.CurrentVersion) return;
-
-            _cachedPeople[person.Id] = person;
-            WeakEventManager.GetWeakEventManager(this).RaiseEvent(this, new EventArgs<Person>(person), "PeopleCacheUpdated");
-        }
-
-        public event EventHandler<EventArgs<Movie>> MovieCacheUpdated
-        {
-            add { WeakEventManager.GetWeakEventManager(this).AddEventHandler("MovieCacheUpdated", value); }
-            remove { WeakEventManager.GetWeakEventManager(this).RemoveEventHandler("MovieCacheUpdated", value); }
-        }
-
-        public event EventHandler<EventArgs<Person>> PeopleCacheUpdated
-        {
-            add { WeakEventManager.GetWeakEventManager(this).AddEventHandler("PeopleCacheUpdated", value); }
-            remove { WeakEventManager.GetWeakEventManager(this).RemoveEventHandler("PeopleCacheUpdated", value); }
-        }
- 
-        public async Task<Movie> GetMovieAsync(Video video)
-        {
-            if (!video.HasTmdbLink) 
-                return await SearchForMovie(video);
-
-            return await LoadMovieAsync(video.TmdbId);
-        }
-
-        private async Task<Movie> LoadMovieAsync(string tmdbId)
-        {
-            DateTime failedDate;
-            if (_failedMovies.TryGetValue(tmdbId, out failedDate))
-            {
-                if (DateTime.Now.Subtract(failedDate).TotalMinutes > FailedLookupExpiryMinutes)
-                    _failedMovies.Remove(tmdbId);
-                else
-                    return null;
-            }
-
-            Movie movie;
-            if (_cachedMovies.TryGetValue(tmdbId, out movie))
-                return movie;
-
             var response = await _restConnection.MakeRequestAsync<Movie, object>(Method.Get, ResponseType.Json,
-                PlexResources.TMDbBaseUrl, string.Format(PlexResources.TMDbMovie, tmdbId, _apiKey),
-                timeout: 30000);
+                PlexResources.TmdbBaseUrl, string.Format(PlexResources.TmdbMovie, tmdbId, _apiKey),
+                timeout: timeout);
 
-            if (response == null || response.ResponseObject == null)
-            {
-                _failedMovies[tmdbId] = DateTime.Now;
-                return null;
-            }
-
-            movie = response.ResponseObject;
-
-            if (await LoadCreditsForMovie(movie))
-                AddMovieToCache(movie);
-            else
-                _failedMovies[tmdbId] = DateTime.Now;
-
-            return movie;
+            return response == null ? null : response.ResponseObject;
         }
 
-        private async Task<Movie> SearchForMovie(Video video)
+        public async Task<TvShow> GetTvShowAsync(string tmdbId, int seasonNumber, int episodeNumber)
         {
-            if (!video.HasImdbLink)
-                return null;
+            var tvShow = await LoadTvShowAsync(tmdbId);
 
-            DateTime failedDate;
-            if (_failedMoviesByImdb.TryGetValue(video.ImdbId, out failedDate))
-            {
-                if (DateTime.Now.Subtract(failedDate).TotalMinutes > FailedLookupExpiryMinutes)
-                    _failedMoviesByImdb.Remove(video.ImdbId);
-                else
-                    return null;
-            }
+            return (tvShow == null ||
+                    !await LoadCreditsForTvShowAsync(tvShow, seasonNumber, episodeNumber) ||
+                    !await LoadExternalIdsForTvShowAsync(tvShow, seasonNumber, episodeNumber)) ? null : tvShow;
+        }
 
-            Movie movie;
-            if (_cachedMoviesByImdb.TryGetValue(video.ImdbId, out movie))
-                return movie;
+        private async Task<TvShow> LoadTvShowAsync(string tmdbId, int timeout = 30000)
+        {
+            var response = await _restConnection.MakeRequestAsync<TvShow, object>(Method.Get, ResponseType.Json,
+                PlexResources.TmdbBaseUrl, string.Format(PlexResources.TmdbTvShow, tmdbId, _apiKey),
+                timeout: timeout);
 
-            var response = await _restConnection.MakeRequestAsync<MovieSearchResults, object>(Method.Get, ResponseType.Json,
-                PlexResources.TMDbBaseUrl, string.Format(PlexResources.TMDbSearchMovie, video.Title, video.Year, _apiKey),
+            return response == null ? null : response.ResponseObject;
+        }
+
+        public async Task<Movie> SearchForMovieAsync(string title, int year, ExternalIds knownIds)
+        {
+            var response = await _restConnection.MakeRequestAsync<SearchResults, object>(Method.Get, ResponseType.Json,
+                PlexResources.TmdbBaseUrl, string.Format(PlexResources.TmdbSearchMovie, title, year, _apiKey),
                 timeout: 30000);
 
             if (response == null || response.ResponseObject == null || !response.ResponseObject.Results.Any())
-            {
-                _failedMoviesByImdb[video.ImdbId] = DateTime.Now;
                 return null;
+
+            var results = response.ResponseObject.Results.Where(r => r.Title == title).ToList();
+            if (results.Count() == 1)
+                return await GetMovieAsync(results.Single().Id);
+
+            if (knownIds.ImdbId.IsNullOrEmpty()) return null;
+
+            // try matching ids
+            foreach (var result in results)
+            {
+                var movie = await LoadMovieAsync(result.Id, 10000);
+                if (movie.ImdbId == knownIds.ImdbId)
+                {
+                    if (!await LoadCreditsForMovieAsync(movie)) return null;
+                    return movie;
+                }
             }
 
-            var results = response.ResponseObject.Results.Where(r => r.Title == video.Title).ToList();
-            if (results.Count() > 1)
-                results = results.Where(r => r.ReleaseDate == video.OriginallyAvailableAt).ToList();
-
-            if (results.Count() != 1)
-            {
-                _failedMoviesByImdb[video.ImdbId] = DateTime.Now;
-                return null;
-            }
-
-            video.TmdbId = results.Single().Id;
-
-            if (video.TmdbId.IsNullOrEmpty())
-            {
-                _failedMoviesByImdb[video.ImdbId] = DateTime.Now;
-                return null;
-            }
-
-            return await LoadMovieAsync(video.TmdbId);
+            return null;
         }
 
-        private async Task<bool> LoadCreditsForMovie(Movie movie)
+        public async Task<TvShow> SearchForTvShowAsync(string title, int year, ExternalIds knownSeriesIds, 
+            int seasonNumber, int episodeNumber)
+        {
+            // handle cases like Castle (called Castle(2009) on TVDB)
+            var yearPart = " (" + year + ")";
+            if (title.EndsWith(yearPart))
+                title = title.Replace(yearPart, "");
+
+            var response = await _restConnection.MakeRequestAsync<SearchResults, object>(Method.Get, ResponseType.Json,
+                PlexResources.TmdbBaseUrl, string.Format(PlexResources.TmdbSearchTvShow, title, _apiKey),
+                timeout: 30000);
+
+            if (response == null || response.ResponseObject == null || !response.ResponseObject.Results.Any())
+                return null;
+
+            var results = response.ResponseObject.Results.Where(r => r.Name == title).ToList();
+            if (results.Count() == 1)
+                return await GetTvShowAsync(results.Single().Id, seasonNumber, episodeNumber);
+
+            results = results.Where(r => r.FirstAirDate.Contains(year.ToString())).ToList();
+            if (results.Count() == 1)
+                return await GetTvShowAsync(results.Single().Id, seasonNumber, episodeNumber);
+
+            if (knownSeriesIds.ImdbId.IsNullOrEmpty() && knownSeriesIds.TvdbId.IsNullOrEmpty()) return null;
+
+            // try matching ids
+            foreach (var result in results)
+            {
+                var tvShow = await LoadTvShowAsync(result.Id, 10000);
+                if (tvShow.ExternalExternalIds.ImdbId == knownSeriesIds.ImdbId ||
+                    tvShow.ExternalExternalIds.TvdbId == knownSeriesIds.TvdbId)
+                    return (!await LoadCreditsForTvShowAsync(tvShow, seasonNumber, episodeNumber) ||
+                            !await LoadExternalIdsForTvShowAsync(tvShow, seasonNumber, episodeNumber)) ? null : tvShow;
+            }
+
+            return null;
+        }
+
+        private async Task<bool> LoadCreditsForMovieAsync(Movie movie)
         {
             var response = await _restConnection.MakeRequestAsync<Credits, object>(Method.Get,
-                ResponseType.Json, PlexResources.TMDbBaseUrl,
-                string.Format(PlexResources.TMDbCredits, movie.Id, _apiKey), timeout: 30000);
+                ResponseType.Json, PlexResources.TmdbBaseUrl,
+                string.Format(PlexResources.TmdbCredits, movie.Id, _apiKey),
+                timeout: 30000);
 
             if (response == null || response.ResponseObject == null)
                 return false;
 
-            var credits = response.ResponseObject;
-            movie.Credits = credits;
+            movie.Credits = response.ResponseObject;
 
-            var retVal = true;
+            PopulateImagePaths(movie.Credits);
 
-            foreach (var cast in credits.Cast.Where(c => !c.Id.IsNullOrEmpty()))
-            {
-                cast.Person = await GetPerson(cast.Id);
-                if (cast.Person == null)
-                    retVal = false;
-            }
-
-            return retVal;
+            return true;
         }
 
-        private async Task<Person> GetPerson(string id)
+        private static void PopulateImagePaths(Credits credits)
         {
-            Person person;
-            if (_cachedPeople.TryGetValue(id, out person))
-                return person;
+            if (credits != null)
+            {
+                if (credits.Cast != null)
+                {
+                    foreach (var cast in credits.Cast.Where(c => !c.ProfilePath.IsNullOrEmpty()))
+                        cast.ProfilePath = PlexResources.TmdbActorImageRoot + cast.ProfilePath;
+                }
 
-            var response = await _restConnection.MakeRequestAsync<Person, object>(Method.Get,
-                ResponseType.Json, PlexResources.TMDbBaseUrl,
-                string.Format(PlexResources.TMDbPerson, id, _apiKey), timeout: 30000);
+                if (credits.GuestStars != null)
+                {
+                    foreach (var cast in credits.GuestStars.Where(c => !c.ProfilePath.IsNullOrEmpty()))
+                        cast.ProfilePath = PlexResources.TmdbActorImageRoot + cast.ProfilePath;
+                }
+            }
+        }
+
+        private async Task<bool> LoadCreditsForTvShowAsync(TvShow tvShow, int seasonNumber, int episodeNumber)
+        {
+            var response = await _restConnection.MakeRequestAsync<Credits, object>(Method.Get,
+                ResponseType.Json, PlexResources.TmdbBaseUrl,
+                string.Format(PlexResources.TmdbTvShowCredits, tvShow.Id, seasonNumber, episodeNumber, _apiKey),
+                timeout: 30000);
 
             if (response == null || response.ResponseObject == null)
-                return null;
+                return false;
 
-            person = response.ResponseObject;
+            tvShow.Credits = response.ResponseObject;
 
-            AddPersonToCache(person);
+            PopulateImagePaths(tvShow.Credits);
+            return true;
+        }
+        
+        private async Task<bool> LoadExternalIdsForTvShowAsync(TvShow tvShow, int seasonNumber, int episodeNumber)
+        {
+            var response = await _restConnection.MakeRequestAsync<TmdbExternalIds, object>(Method.Get,
+                ResponseType.Json, PlexResources.TmdbBaseUrl,
+                string.Format(PlexResources.TmdbTvShowExternalIds, tvShow.Id, seasonNumber, episodeNumber, _apiKey),
+                timeout: 30000);
 
-            return person;
+            if (response == null || response.ResponseObject == null)
+                return false;
+
+            tvShow.EpisodeExternalIds = response.ResponseObject;
+
+            response = await _restConnection.MakeRequestAsync<TmdbExternalIds, object>(Method.Get,
+                ResponseType.Json, PlexResources.TmdbBaseUrl,
+                string.Format(PlexResources.TmdbTvShowSeriesExternalIds, tvShow.Id, _apiKey),
+                timeout: 30000);
+
+            if (response == null || response.ResponseObject == null)
+                return false;
+
+            tvShow.ExternalExternalIds = response.ResponseObject;
+
+            return true;
+        }
+
+        public async Task<Person> GetPersonAsync(string tmdbId)
+        {
+            var response = await _restConnection.MakeRequestAsync<Person, object>(Method.Get, ResponseType.Json,
+                PlexResources.TmdbBaseUrl, string.Format(PlexResources.TmdbPerson, tmdbId, _apiKey),
+                timeout: 30000);
+
+            return response == null ? null : response.ResponseObject;
         }
     }
 }

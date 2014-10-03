@@ -7,15 +7,57 @@ namespace JimBobBennett.RestAndRelaxForPlex.PlexObjects
 {
     public class Role : IdTagObjectBase<Role>
     {
+        public Role()
+        {
+            ExternalIds = new ExternalIds();
+        }
+
         [XmlNameMapping("Role")]
         public string RoleName { get; set; }
 
         public string Thumb { get; set; }
 
-        public string ImdbId { get; set; }
-        public bool HasImdbId { get { return !ImdbId.IsNullOrEmpty(); } }
-        public Uri ImdbUrl { get { return ImdbId.IsNullOrEmpty() ? null : new Uri(string.Format(PlexResources.ImdbNameUrl, ImdbId)); } }
-        public Uri ImdbSchemeUrl { get { return ImdbId.IsNullOrEmpty() ? null : new Uri(string.Format(PlexResources.ImdbNameSchemeUrl, ImdbId)); } }
+        public ExternalIds ExternalIds { get; set; }
+
+        public Uri Uri
+        {
+            get
+            {
+                if (!ExternalIds.ImdbId.IsNullOrEmpty())
+                    return ImdbUrl;
+
+                if (!ExternalIds.TmdbId.IsNullOrEmpty())
+                    return TmdbUrl;
+
+                return null;
+            }
+        }
+
+        public Uri SchemeUri
+        {
+            get
+            {
+                if (!ExternalIds.ImdbId.IsNullOrEmpty())
+                    return ImdbSchemeUrl;
+
+                return null;
+            }
+        }
+
+        internal Uri ImdbUrl
+        {
+            get { return new Uri(string.Format(PlexResources.ImdbNameUrl, ExternalIds.ImdbId)); }
+        }
+
+        internal Uri TmdbUrl
+        {
+            get { return new Uri(string.Format(PlexResources.TmdbPersonUrl, ExternalIds.ImdbId)); }
+        }
+
+        internal Uri ImdbSchemeUrl
+        {
+            get { return new Uri(string.Format(PlexResources.ImdbNameSchemeUrl, ExternalIds.ImdbId)); }
+        }
 
         protected override bool OnUpdateFrom(IdTagObjectBase<Role> newValue, List<string> updatedPropertyNames)
         {

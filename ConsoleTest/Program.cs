@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Specialized;
+using System.Linq;
 using System.Threading.Tasks;
+using JimBobBennett.RestAndRelaxForPlex.Caches;
 using JimBobBennett.RestAndRelaxForPlex.Connection;
 using JimBobBennett.RestAndRelaxForPlex.PlexObjects;
 using JimBobBennett.JimLib.Xamarin.Net45.Images;
@@ -16,16 +18,27 @@ namespace ConsoleTest
         {
             var restConnection = new RestConnection();
 
-            var connectionManager = new ConnectionManager(new Timer(), new LocalServerDiscovery(),
-                restConnection, new MyPlexConnection(restConnection), new TheTvdbConnection(restConnection),
-                new ImageHelper(restConnection), new TMDbConnection(restConnection, TestConstants.TMDbApiKey));
+            var tvdbConnection = new TvdbConnection(restConnection);
+            var tmdbConnection = new TmdbConnection(restConnection, TestConstants.TmdbApiKey);
 
+            var connectionManager = new ConnectionManager(new Timer(), new LocalServerDiscovery(),
+                restConnection, new MyPlexConnection(restConnection), new ImageHelper(restConnection),
+                new TvdbCache(tvdbConnection), new TmdbCache(tmdbConnection));
+            
             Task.Factory.StartNew(async () =>
                 {
-                    ((INotifyCollectionChanged) connectionManager.NowPlaying).CollectionChanged += (s, e) =>
+                    ((INotifyCollectionChanged)connectionManager.NowPlaying.VideosNowPlaying).CollectionChanged += async (s, e) =>
                         {
-                            foreach (var video in connectionManager.NowPlaying)
+                            foreach (var video in connectionManager.NowPlaying.VideosNowPlaying.ToList())
+                            {
+                                Console.WriteLine("Loading external data for: " + video.Title);
+                                await connectionManager.PopulateFromExternalSourcesAsync(video);
+                                var role = video.Roles.FirstOrDefault();
+                                if (role != null)
+                                    await connectionManager.PopulateFromExternalSourcesAsync(role);
+
                                 WriteVideo(video);
+                            }
                         };
 
                     Console.WriteLine("Connecting to MyPlex...");
@@ -44,6 +57,8 @@ namespace ConsoleTest
 
         private static void WriteVideo(Video video)
         {
+            Console.WriteLine();
+            Console.WriteLine();
             Console.WriteLine(video.Title);
 
             if (video.Type == VideoType.Episode)
@@ -55,25 +70,49 @@ namespace ConsoleTest
                 Console.WriteLine("Type: " + video.Type);
 
             Console.WriteLine("Playing on " + video.Player.Title);
-            Console.WriteLine("Thumb: " + video.VideoThumb);
+            Console.WriteLine("Thumb: " + video.VideoImageSource);
+
+            Console.WriteLine();
+            Console.WriteLine("User:" + video.UserName);
+            Console.WriteLine("User Thumb:" + video.UserThumb);
+            Console.WriteLine();
+            Console.WriteLine("External ids:");
+            Console.WriteLine(video.ExternalIds);
+            Console.WriteLine("Episode External ids:");
+            Console.WriteLine(video.EpisodeExternalIds);
+            Console.WriteLine(video.Player.State);
+
+            Console.WriteLine();
             Console.WriteLine("Links:");
             Console.WriteLine(video.Uri);
             Console.WriteLine(video.SchemeUri);
-            Console.WriteLine("IMDB Id: " + video.ImdbId);
-            Console.WriteLine("Tvdbv Id: " + video.TvdbId);
-            Console.WriteLine("TMDb Id: " + video.TmdbId);
-            Console.WriteLine(video.Player.State);
+            Console.WriteLine();
+            Console.WriteLine("IMDB (episode): " + video.ImdbEpisodeUri);
+            Console.WriteLine("IMDB: " + video.ImdbUri);
+            Console.WriteLine("TMDb (episode): " + video.TmdbEpisodeUri);
+            Console.WriteLine("TMDb: " + video.TmdbUri);
+            Console.WriteLine("TVDB (episode): " + video.TvdbEpisodeUri);
+            Console.WriteLine("TVDB: " + video.TvdbUri);
 
+            Console.WriteLine();
             if (video.Player.State == PlayerState.Playing)
                 Console.WriteLine("Position: " + video.Progress);
 
+            Console.WriteLine();
             Console.WriteLine("Cast:");
+
             foreach (var role in video.Roles)
-                Console.WriteLine(role.RoleName + ": " + role.Tag + " - " + role.ImdbUrl + " (" + role.ImdbSchemeUrl + ")");
+            {
+                Console.WriteLine(role.RoleName + ": " + role.Tag);
+                Console.WriteLine("   IMDB: " + role.ImdbUrl + " (" + role.ImdbSchemeUrl + ")");
+                Console.WriteLine("   Image: " + role.Thumb);
+            }
 
             //Console.WriteLine("Directors");
             //foreach (var director in video.Directors)
             //    Console.WriteLine(director.tag);
+
+            Console.WriteLine();
         }
     }
 }

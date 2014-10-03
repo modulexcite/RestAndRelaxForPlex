@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
+using JimBobBennett.JimLib.Events;
 using JimBobBennett.RestAndRelaxForPlex.PlexObjects;
 using JimBobBennett.JimLib.Collections;
 using JimBobBennett.JimLib.Mvvm;
@@ -56,7 +57,27 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
             }
         }
 
-        public bool IsOnLine { get { return MediaContainer != null; } }
+        public ConnectionStatus ConnectionStatus
+        {
+            get { return _connectionStatus; }
+            private set
+            {
+                if (_connectionStatus == value) return;
+
+                _connectionStatus = value;
+                RaisePropertyChanged();
+
+                WeakEventManager.GetWeakEventManager(this).RaiseEvent(this,
+                    new EventArgs<ConnectionStatus>(ConnectionStatus), "ConnectionStatusChanged");
+            }
+        }
+
+        public event EventHandler<EventArgs<ConnectionStatus>> ConnectionStatusChanged
+        {
+            add { WeakEventManager.GetWeakEventManager(this).AddEventHandler("ConnectionStatusChanged", value); }
+            remove { WeakEventManager.GetWeakEventManager(this).RemoveEventHandler("ConnectionStatusChanged", value); }
+        }
+
         public string Platform { get { return MediaContainer != null ? MediaContainer.Platform : string.Empty; } }
         public string MachineIdentifier { get { return MediaContainer != null ? MediaContainer.MachineIdentifier : string.Empty; } }
 
@@ -73,6 +94,7 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
         
         private readonly ObservableCollectionEx<Video> _nowPlaying = new ObservableCollectionEx<Video>();
         private readonly ObservableCollectionEx<Server> _clients = new ObservableCollectionEx<Server>();
+        private ConnectionStatus _connectionStatus;
 
         public ReadOnlyObservableCollection<Video> NowPlaying { get; private set; }
         public ReadOnlyObservableCollection<Server> Clients { get; private set; }
@@ -106,7 +128,7 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
             else
                 await TryConnectionAsync(ConnectionUri);
 
-            if (IsOnLine)
+            if (ConnectionStatus == ConnectionStatus.Connected)
                 await RefreshSessionAsync();
         }
 
@@ -146,6 +168,8 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
         private void ClearMediaContainer()
         {
             MediaContainer = null;
+            ConnectionStatus = ConnectionStatus.NotConnected;
+
             _nowPlaying.Clear();
             _clients.Clear();
         }
@@ -167,22 +191,32 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
 
         private async Task<bool> TryConnectionAsync(string uri)
         {
-            var mediaContainer = await MakePlexRequestAsync<MediaContainer, string>(uri, "/");
+            var response = await MakePlexRequestAsync<MediaContainer, string>(uri, "/");
 
-            if (mediaContainer == null) return false;
+            if (response != null && response.ResponseObject != null)
+                ConnectionStatus = ConnectionStatus.Connected;
+            else
+            {
+                if (response != null && response.StatusCode == 401)
+                    ConnectionStatus = ConnectionStatus.NotAuthorized;
+                else
+                    ConnectionStatus = ConnectionStatus.NotConnected;
+            }
+            
+            if (response == null) return false;
 
             if (MediaContainer == null)
             {
-                MediaContainer = mediaContainer.ResponseObject;
+                MediaContainer = response.ResponseObject;
                 await RefreshSessionAsync();
             }
             else
             {
-                if (mediaContainer.ResponseObject == null)
+                if (response.ResponseObject == null)
                     ClearMediaContainer();
                 else
                 {
-                    if (MediaContainer.UpdateFrom(mediaContainer.ResponseObject))
+                    if (MediaContainer.UpdateFrom(response.ResponseObject))
                         RaisePropertyChanged(() => MediaContainer);
 
                     await RefreshSessionAsync();

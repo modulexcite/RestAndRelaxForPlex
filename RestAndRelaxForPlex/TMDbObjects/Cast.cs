@@ -1,8 +1,8 @@
 ﻿using Newtonsoft.Json;
 
-namespace JimBobBennett.RestAndRelaxForPlex.TMDbObjects
+namespace JimBobBennett.RestAndRelaxForPlex.TmdbObjects
 {
-    public class Cast : TMDbObjectBase
+    public class Cast : TmdbObjectBase
     {
         [JsonProperty("cast_id")]
         public string CastId { get; set; }

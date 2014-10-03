@@ -55,6 +55,9 @@ namespace JimBobBennett.RestAndRelaxForPlex.PlexObjects
             isUpdated = UpdateValue(() => Vendor, newDevice, updatedPropertyNames) | isUpdated;
             isUpdated = UpdateValue(() => Version, newDevice, updatedPropertyNames) | isUpdated;
 
+            if (Connections == null)
+                Connections = new ObservableCollectionEx<Connection>();
+
             foreach (var connection in Connections.ToList().Where(con => newDevice.Connections.All(c => c.Uri != con.Uri)))
             {
                 Connections.Remove(connection);

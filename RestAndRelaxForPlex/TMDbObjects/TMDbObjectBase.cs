@@ -1,12 +1,12 @@
 using Newtonsoft.Json;
 
-namespace JimBobBennett.RestAndRelaxForPlex.TMDbObjects
+namespace JimBobBennett.RestAndRelaxForPlex.TmdbObjects
 {
-    public abstract class TMDbObjectBase
+    public abstract class TmdbObjectBase
     {
         internal const int CurrentVersion = 1;
 
-        protected TMDbObjectBase()
+        protected TmdbObjectBase()
         {
             Version = CurrentVersion;
         }

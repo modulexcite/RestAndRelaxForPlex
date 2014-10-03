@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using JimBobBennett.RestAndRelaxForPlex.PlexObjects;
 
@@ -10,8 +10,12 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
         Task<bool> ConnectToServerAsync(string uri);
         bool IsConnectedToMyPlex { get; }
         Task ConnectAsync();
-        Task<Video> RefreshVideo(Video video);
+        Task<Video> RefreshVideoAsync(Video video);
 
-        IEnumerable<Video> NowPlaying { get; }
+        INowPlaying NowPlaying { get; }
+        ReadOnlyObservableCollection<ServerConnection> ServerConnections { get; }
+
+        Task PopulateFromExternalSourcesAsync(Video video);
+        Task PopulateFromExternalSourcesAsync(Role role);
     }
 }
