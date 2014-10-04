@@ -139,9 +139,16 @@ namespace JimBobBennett.RestAndRelaxForPlex.PlexObjects
 
         public int Year { get; set; }
 
-        public PlayerState State
+        public PlayerState PlayerState
         {
             get { return Player.State; }
+            set
+            {
+                if (Player.State == value) return;
+
+                Player.State = value;
+                RaisePropertyChanged();
+            }
         }
 
         public string UserThumb { get { return User.Thumb; } }
@@ -197,7 +204,7 @@ namespace JimBobBennett.RestAndRelaxForPlex.PlexObjects
         private void PlayerOnPropertyChanged(object sender, PropertyChangedEventArgs e)
         {
             if (e.PropertyNameMatches(() => _player.State))
-                RaisePropertyChanged(() => State);
+                RaisePropertyChanged(() => PlayerState);
 
             if (e.PropertyNameMatches(() => _player.Title))
                 RaisePropertyChanged(() => PlayerName);
@@ -267,7 +274,7 @@ namespace JimBobBennett.RestAndRelaxForPlex.PlexObjects
         {
             get
             {
-                switch (Type)
+                switch (VideoType)
                 {
                     case VideoType.Movie:
                         return new Uri(string.Format(PlexResources.TmdbMovieUrl, ExternalIds.TmdbId));
@@ -326,7 +333,21 @@ namespace JimBobBennett.RestAndRelaxForPlex.PlexObjects
         [XmlNameMapping("index")]
         public int EpisodeNumber { get; set; }
 
-        public VideoType Type { get; set; }
+        public string Type { get; set; }
+
+        public VideoType VideoType
+        {
+            get
+            {
+                if (string.Equals(Type, "Movie", StringComparison.OrdinalIgnoreCase))
+                    return VideoType.Movie;
+
+                if (string.Equals(Type, "Episode", StringComparison.OrdinalIgnoreCase))
+                    return VideoType.Episode;
+
+                return VideoType.Unknown;
+            }
+        }
 
         protected override bool OnUpdateFrom(Video newValue, List<string> updatedPropertyNames)
         {

@@ -11,14 +11,73 @@ using Newtonsoft.Json;
 
 namespace JimBobBennett.RestAndRelaxForPlex.Caches
 {
+    public class MovieCacheKey : IEquatable<MovieCacheKey>
+    {
+        public MovieCacheKey(string title, int year, string imdbId, string tvdbId = null)
+        {
+            Title = title;
+            ImdbId = imdbId;
+            TvdbId = tvdbId;
+            Year = year;
+        }
+
+        public MovieCacheKey()
+        {
+        }
+
+        public string Title { get; set; }
+        public string ImdbId { get; set; }
+        public int Year { get; set; }
+        public string TvdbId { get; set; }
+
+        public bool Equals(MovieCacheKey other)
+        {
+            if (ReferenceEquals(null, other)) return false;
+            if (ReferenceEquals(this, other)) return true;
+            return string.Equals(Title, other.Title) && 
+                string.Equals(ImdbId, other.ImdbId) && 
+                Year == other.Year && 
+                string.Equals(TvdbId, other.TvdbId);
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (ReferenceEquals(null, obj)) return false;
+            if (ReferenceEquals(this, obj)) return true;
+            return obj.GetType() == GetType() && Equals((MovieCacheKey) obj);
+        }
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                var hashCode = (Title != null ? Title.GetHashCode() : 0);
+                hashCode = (hashCode*397) ^ (ImdbId != null ? ImdbId.GetHashCode() : 0);
+                hashCode = (hashCode*397) ^ Year;
+                hashCode = (hashCode*397) ^ (TvdbId != null ? TvdbId.GetHashCode() : 0);
+                return hashCode;
+            }
+        }
+
+        public static bool operator ==(MovieCacheKey left, MovieCacheKey right)
+        {
+            return Equals(left, right);
+        }
+
+        public static bool operator !=(MovieCacheKey left, MovieCacheKey right)
+        {
+            return !Equals(left, right);
+        }
+    }
+
     public class TmdbCache : ITmdbCache
     {
         private readonly ITmdbConnection _tmdbConnection;
 
-        private readonly CacheWithFail<Tuple<string, int, string>, Movie> _movieCacheByTitle = new CacheWithFail<Tuple<string, int, string>, Movie>();
+        private readonly CacheWithFail<MovieCacheKey, Movie> _movieCacheByTitle = new CacheWithFail<MovieCacheKey, Movie>();
         private readonly CacheWithFail<string, Movie> _movieCache = new CacheWithFail<string, Movie>();
 
-        private readonly CacheWithFail<Tuple<string, int, string, string>, TvShow> _tvShowCacheByTitle = new CacheWithFail<Tuple<string, int, string, string>, TvShow>();
+        private readonly CacheWithFail<MovieCacheKey, TvShow> _tvShowCacheByTitle = new CacheWithFail<MovieCacheKey, TvShow>();
         private readonly CacheWithFail<string, TvShow> _tvShowCache = new CacheWithFail<string, TvShow>();
 
         private readonly CacheWithFail<string, Person> _peopleCache = new CacheWithFail<string, Person>();
@@ -40,7 +99,7 @@ namespace JimBobBennett.RestAndRelaxForPlex.Caches
 
                 if (movie != null)
                 {
-                    _movieCacheByTitle.Add(Tuple.Create(video.Title, video.Year, movie.ImdbId), movie);
+                    _movieCacheByTitle.Add(new MovieCacheKey(video.Title, video.Year, movie.ImdbId), movie);
                     return movie;
                 }
             }
@@ -52,13 +111,13 @@ namespace JimBobBennett.RestAndRelaxForPlex.Caches
                 if (movie != null)
                 {
                     _movieCache.Add(movie.Id, movie);
-                    _movieCacheByTitle.Add(Tuple.Create(video.Title, video.Year, movie.ImdbId), movie);
+                    _movieCacheByTitle.Add(new MovieCacheKey(video.Title, video.Year, movie.ImdbId), movie);
                 }
 
                 return movie;
             }
 
-            var key = Tuple.Create(video.Title, video.Year, video.ExternalIds.ImdbId);
+            var key = new MovieCacheKey(video.Title, video.Year, video.ExternalIds.ImdbId);
             movie = await _movieCacheByTitle.GetOrAddAsync(key, async s => await _tmdbConnection.SearchForMovieAsync(video.Title, video.Year, video.ExternalIds));
 
             if (movie != null)
@@ -78,7 +137,7 @@ namespace JimBobBennett.RestAndRelaxForPlex.Caches
 
                 if (show != null)
                 {
-                    _tvShowCacheByTitle.Add(Tuple.Create(video.Show, video.Year, show.ExternalExternalIds.ImdbId,
+                    _tvShowCacheByTitle.Add(new MovieCacheKey(video.Show, video.Year, show.ExternalExternalIds.ImdbId,
                         show.ExternalExternalIds.TvdbId),
                         show);
 
@@ -94,14 +153,14 @@ namespace JimBobBennett.RestAndRelaxForPlex.Caches
                 if (show != null)
                 {
                     _tvShowCache.Add(show.Id, show);
-                    _tvShowCacheByTitle.Add(Tuple.Create(video.Show, video.Year, show.ExternalExternalIds.ImdbId,
+                    _tvShowCacheByTitle.Add(new MovieCacheKey(video.Show, video.Year, show.ExternalExternalIds.ImdbId,
                         show.ExternalExternalIds.TvdbId), show);
                 }
 
                 return show;
             }
 
-            var key = Tuple.Create(video.Show, video.Year, video.ExternalIds.ImdbId, video.ExternalIds.TvdbId);
+            var key = new MovieCacheKey(video.Show, video.Year, video.ExternalIds.ImdbId, video.ExternalIds.TvdbId);
             show = await _tvShowCacheByTitle.GetOrAddAsync(key,
                 async s => await _tmdbConnection.SearchForTvShowAsync(video.Show, video.Year, video.ExternalIds,
                     video.SeasonNumber, video.EpisodeNumber));
@@ -135,20 +194,39 @@ namespace JimBobBennett.RestAndRelaxForPlex.Caches
         {
             if (json.IsNullOrEmpty()) return;
 
+            var caches = JsonConvert.DeserializeObject<Dictionary<string, string>>(json);
+            string output;
+
             try
             {
-                var caches = JsonConvert.DeserializeObject<Dictionary<string, string>>(json);
-
-                string output;
                 if (caches.TryGetValue("_movieCache", out output))
                     _movieCache.LoadCacheFromJson(output);
 
                 if (caches.TryGetValue("_movieCacheByTitle", out output))
                     _movieCacheByTitle.LoadCacheFromJson(output);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("Failed to deserialize caches: " + ex.Message);
 
+                _movieCache.Clear();
+                _movieCacheByTitle.Clear();
+            }
+
+            try
+            {
                 if (caches.TryGetValue("_peopleCache", out output))
                     _peopleCache.LoadCacheFromJson(output);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("Failed to deserialize caches: " + ex.Message);
 
+                _peopleCache.Clear();
+            }
+            
+            try
+            {
                 if (caches.TryGetValue("_tvShowCache", out output))
                     _tvShowCache.LoadCacheFromJson(output);
 
@@ -158,6 +236,9 @@ namespace JimBobBennett.RestAndRelaxForPlex.Caches
             catch (Exception ex)
             {
                 Debug.WriteLine("Failed to deserialize caches: " + ex.Message);
+
+                _tvShowCache.Clear();
+                _tvShowCacheByTitle.Clear();
             }
         }
     }

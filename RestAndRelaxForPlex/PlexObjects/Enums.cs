@@ -8,6 +8,7 @@
 
     public enum VideoType
     {
+        Unknown,
         Episode,
         Movie
     }

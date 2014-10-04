@@ -61,7 +61,7 @@ namespace ConsoleTest
             Console.WriteLine();
             Console.WriteLine(video.Title);
 
-            if (video.Type == VideoType.Episode)
+            if (video.VideoType == VideoType.Episode)
             {
                 Console.WriteLine("Show name: " + video.Show);
                 Console.WriteLine("Season: " + video.SeasonNumber + ", Episode: " + video.EpisodeNumber);

@@ -63,6 +63,8 @@ namespace JimBobBennett.RestAndRelaxForPlex.Caches
             catch (Exception ex)
             {
                 Debug.WriteLine("Failed to deserialize caches: " + ex.Message);
+
+                _seriesCache.Clear();
             }
         }
     }

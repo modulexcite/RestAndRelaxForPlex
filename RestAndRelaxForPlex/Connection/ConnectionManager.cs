@@ -229,7 +229,7 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
 
                 foreach (var connection in _plexServerConnections)
                 {
-                    foreach (var video in connection.NowPlaying)
+                    foreach (var video in connection.NowPlaying.Where(v => v.VideoType != VideoType.Unknown))
                     {
                         video.PlexServerConnection = connection;
                         if (!nowPlaying.Any(v => v.Player.Key == video.Player.Key && 
@@ -283,7 +283,7 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
                     }
                 }
 
-                switch (video.Type)
+                switch (video.VideoType)
                 {
                     case VideoType.Movie:
                         await PopulateFromTmdb(video);
@@ -319,7 +319,7 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
         {
             if (video.HasBeenPopulatedFromTmdb) return;
 
-            if (video.Type == VideoType.Episode)
+            if (video.VideoType == VideoType.Episode)
             {
                 var show = await _tmdbCache.GetTvShowAsync(video);
 
@@ -348,7 +348,7 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
                     video.HasBeenPopulatedFromTmdb = true;
                 }
             }
-            else if (video.Type == VideoType.Movie)
+            else if (video.VideoType == VideoType.Movie)
             {
                 var movie = await _tmdbCache.GetMovieAsync(video);
 

@@ -81,7 +81,7 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
                     if (matches)
                     {
                         oldVideo.ViewOffset = video.ViewOffset;
-                        oldVideo.Player.State = video.Player.State;
+                        oldVideo.PlayerState = video.PlayerState;
                     }
                     else
                         byPlayer[playerKey] = video;
