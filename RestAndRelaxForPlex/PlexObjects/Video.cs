@@ -33,6 +33,7 @@ namespace JimBobBennett.RestAndRelaxForPlex.PlexObjects
         private string _guid;
         private double _viewOffset;
         private User _user;
+        private ImageSource _thumbImageSource;
 
         [NotifyPropertyChangeDependency("Key")]
         public string Guid
@@ -223,18 +224,15 @@ namespace JimBobBennett.RestAndRelaxForPlex.PlexObjects
                 if (!EpisodeExternalIds.ImdbId.IsNullOrEmpty())
                     return "IMDB";
 
-                if (!EpisodeExternalIds.TmdbId.IsNullOrEmpty())
-                    return "TMDb";
+                if (!ExternalIds.ImdbId.IsNullOrEmpty())
+                    return "IMDB";
 
                 if (!EpisodeExternalIds.TvdbId.IsNullOrEmpty())
                     return "TheTVDB";
 
-                if (!ExternalIds.ImdbId.IsNullOrEmpty())
-                    return "IMDB";
-
                 if (!ExternalIds.TmdbId.IsNullOrEmpty())
                     return "TMDb";
-
+                
                 if (!ExternalIds.TvdbId.IsNullOrEmpty())
                     return "TheTVDB";
 
@@ -249,14 +247,14 @@ namespace JimBobBennett.RestAndRelaxForPlex.PlexObjects
                 if (!EpisodeExternalIds.ImdbId.IsNullOrEmpty())
                     return ImdbEpisodeUri;
 
-                if (!ExternalIds.TmdbId.IsNullOrEmpty())
-                    return TmdbUri;
+                if (!ExternalIds.ImdbId.IsNullOrEmpty())
+                    return ImdbUri;
 
                 if (!EpisodeExternalIds.TvdbId.IsNullOrEmpty())
                     return TvdbEpisodeUri;
 
-                if (!ExternalIds.ImdbId.IsNullOrEmpty())
-                    return ImdbUri;
+                if (!ExternalIds.TmdbId.IsNullOrEmpty())
+                    return TmdbUri;
                 
                 if (!ExternalIds.TvdbId.IsNullOrEmpty())
                     return TvdbUri;
@@ -400,7 +398,17 @@ namespace JimBobBennett.RestAndRelaxForPlex.PlexObjects
             get { return Guid; }
         }
 
-        public ImageSource ThumbImageSource { get; internal set; }
+        public ImageSource ThumbImageSource
+        {
+            get { return _thumbImageSource; }
+            internal set
+            {
+                if (_thumbImageSource == value) return;
+
+                _thumbImageSource = value;
+                RaisePropertyChanged();
+            }
+        }
 
         internal IPlexServerConnection PlexServerConnection { get; set; }
 
@@ -409,22 +417,28 @@ namespace JimBobBennett.RestAndRelaxForPlex.PlexObjects
             get { return PlexServerConnection == null ? null : PlexServerConnection.ConnectionUri; }
         }
 
-        public async Task PlayAsync()
+        public async Task<bool> PlayAsync()
         {
             if (PlexServerConnection != null)
-                await PlexServerConnection.PlayVideoAsync(this);
+                return await PlexServerConnection.PlayVideoAsync(this);
+
+            return false;
         }
 
-        public async Task PauseAsync()
+        public async Task<bool> PauseAsync()
         {
             if (PlexServerConnection != null)
-                await PlexServerConnection.PauseVideoAsync(this);
+                return await PlexServerConnection.PauseVideoAsync(this);
+
+            return false;
         }
 
-        public async Task StopAsync()
+        public async Task<bool> StopAsync()
         {
             if (PlexServerConnection != null)
-                await PlexServerConnection.StopVideoAsync(this);
+                return await PlexServerConnection.StopVideoAsync(this);
+
+            return false;
         }
 
         internal bool HasBeenPopulatedFromTvdb { get; set; }

@@ -1,16 +1,28 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Linq;
+using System.Threading.Tasks;
+using JimBobBennett.JimLib.Async;
 using JimBobBennett.JimLib.Collections;
+using JimBobBennett.JimLib.Extensions;
+using JimBobBennett.JimLib.Xamarin.Images;
 using JimBobBennett.RestAndRelaxForPlex.PlexObjects;
 
 namespace JimBobBennett.RestAndRelaxForPlex.Connection
 {
     public class NowPlaying : INowPlaying
     {
+        private readonly IImageHelper _imageHelper;
         public ReadOnlyObservableCollection<Video> VideosNowPlaying { get; private set; }
 
-        public Video GetVideo(string connectionMachineId, string playerId)
+        public Video GetNowPlayingForPlayer(Video video)
+        {
+            return GetVideo(video.PlexServerConnection.MachineIdentifier, video.Player.Key);
+        }
+
+        private Video GetVideo(string connectionMachineId, string playerId)
         {
             Dictionary<string, Video> byPlayer;
             if (_nowPlayingByServerAndPlayer.TryGetValue(connectionMachineId, out byPlayer))
@@ -27,87 +39,143 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
 
         private readonly Dictionary<string, Dictionary<string, Video>> _nowPlayingByServerAndPlayer = new Dictionary<string, Dictionary<string, Video>>();
 
-        public NowPlaying()
+        public NowPlaying(IImageHelper imageHelper)
         {
+            _imageHelper = imageHelper;
+            _videosNowPlaying.RaiseResetOnRestartEvents = false;
             VideosNowPlaying = new ReadOnlyObservableCollection<Video>(_videosNowPlaying);
         }
 
-        internal void UpdateNowPlaying(ICollection<Video> nowPlaying)
+        private readonly object _syncObj = new object();
+
+        internal async Task UpdateNowPlaying(List<Video> nowPlaying)
         {
-            var existing = new List<Video>(_videosNowPlaying);
-
-            // first delete all that are not playing
-            foreach (var video in existing.ToList())
-            {
-                if (!nowPlaying.Any(v => VideosMatchByServerAndPlayer(v, video)))
+            await Task.Run(() =>
                 {
-                    var connectionKey = video.PlexServerConnection.MachineIdentifier;
-                    var playerKey = video.Player.MachineIdentifier;
-
-                    existing.Remove(video);
-
-                    Dictionary<string, Video> byPlayer;
-                    if (_nowPlayingByServerAndPlayer.TryGetValue(connectionKey, out byPlayer))
+                    try
                     {
-                        if (byPlayer.Remove(playerKey) && !byPlayer.Any())
-                            _nowPlayingByServerAndPlayer.Remove(connectionKey);
-                    }
-                }
-            }
+                        lock (_syncObj)
+                        {
+                            _videosNowPlaying.StopEvents = true;
 
-            // now add all new ones or update
-            foreach (var video in nowPlaying)
+                            // first delete all that are not playing
+                            foreach (var video in _videosNowPlaying.ToList())
+                                RemoveIfRequired(nowPlaying, video);
+
+                            // now add all new ones or update
+                            foreach (var video in nowPlaying)
+                                AddOrUpdateVideo(video);
+                        }
+                    }
+                    finally
+                    {
+                        _videosNowPlaying.StopEvents = false;
+                    }
+                });
+        }
+
+        private void RemoveIfRequired(IEnumerable<Video> nowPlaying, Video video)
+        {
+            if (!nowPlaying.Any(v => VideosMatchByServerAndPlayer(v, video)))
             {
                 var connectionKey = video.PlexServerConnection.MachineIdentifier;
                 var playerKey = video.Player.MachineIdentifier;
-
+                
                 Dictionary<string, Video> byPlayer;
-                if (!_nowPlayingByServerAndPlayer.TryGetValue(connectionKey, out byPlayer))
+                if (_nowPlayingByServerAndPlayer.TryGetValue(connectionKey, out byPlayer))
                 {
-                    byPlayer = new Dictionary<string, Video>();
-                    _nowPlayingByServerAndPlayer.Add(connectionKey, byPlayer);
+                    if (byPlayer.Remove(playerKey) && !byPlayer.Any())
+                        _nowPlayingByServerAndPlayer.Remove(connectionKey);
                 }
 
-                Video oldVideo;
-                if (!byPlayer.TryGetValue(playerKey, out oldVideo))
+                _videosNowPlaying.Remove(video);
+            }
+        }
+
+        private void AddOrUpdateVideo(Video video)
+        {
+            var connectionKey = video.PlexServerConnection.MachineIdentifier;
+            var playerKey = video.Player.MachineIdentifier;
+
+            Dictionary<string, Video> byPlayer;
+            if (!_nowPlayingByServerAndPlayer.TryGetValue(connectionKey, out byPlayer))
+            {
+                byPlayer = new Dictionary<string, Video>();
+                _nowPlayingByServerAndPlayer.Add(connectionKey, byPlayer);
+            }
+
+            Video oldVideo;
+            if (!byPlayer.TryGetValue(playerKey, out oldVideo))
+            {
+                AsyncHelper.RunSync(() => LoadThumbImageIfRequired(video));
+                byPlayer.Add(playerKey, video);
+                InsertVideo(video);
+            }
+            else
+            {
+                var matches = video.Guid == oldVideo.Guid;
+
+                if (matches)
                 {
-                    byPlayer.Add(playerKey, video);
-                    existing.Add(video);
+                    oldVideo.ViewOffset = video.ViewOffset;
+                    oldVideo.PlayerState = video.PlayerState;
+
+                    AsyncHelper.RunSync(() => LoadThumbImageIfRequired(oldVideo));
                 }
                 else
                 {
-                    var matches = video.Guid == oldVideo.Guid;
+                    AsyncHelper.RunSync(() => LoadThumbImageIfRequired(video));
+                    byPlayer[playerKey] = video;
 
-                    if (matches)
-                    {
-                        oldVideo.ViewOffset = video.ViewOffset;
-                        oldVideo.PlayerState = video.PlayerState;
-                    }
-                    else
-                        byPlayer[playerKey] = video;
+                    _videosNowPlaying.Remove(oldVideo);
+                    InsertVideo(video);
                 }
             }
+        }
 
-            existing.Sort(Comparer<Video>.Create((v1, v2) => System.String.Compare(v1.Title, v2.Title, System.StringComparison.Ordinal)));
-
-            var needClearAndAdd = existing.Count != _videosNowPlaying.Count;
-            if (!needClearAndAdd)
+        private void InsertVideo(Video video)
+        {
+            for (var i = 0; i < _videosNowPlaying.Count; i++)
             {
-                for (var i = 0; i < existing.Count && !needClearAndAdd; i++)
+                var compare = String.Compare(_videosNowPlaying[i].Title, video.Title, StringComparison.OrdinalIgnoreCase);
+                if (compare >= 0)
                 {
-                    if (existing[i] != _videosNowPlaying[i])
-                        needClearAndAdd = true;
+                    _videosNowPlaying.Insert(i, video);
+                    return;
                 }
             }
 
-            if (needClearAndAdd)
-                _videosNowPlaying.ClearAndAddRange(existing);
+            _videosNowPlaying.Add(video);
+        }
+
+        private async Task LoadThumbImageIfRequired(Video video)
+        {
+            if (!video.VideoImageSource.IsNullOrEmpty() && video.ThumbImageSource == null)
+            {
+                Debug.WriteLine("Loading image for " + video.Title + " from " + video.VideoImageSource + " with token " + 
+                    video.PlexServerConnection.User.AuthenticationToken);
+
+                var image = await _imageHelper.GetImageAsync(video.PlexServerConnection.ConnectionUri,
+                    video.VideoImageSource, headers: PlexHeaders.CreatePlexRequest(video.PlexServerConnection.User),
+                    canCache: true);
+
+                Debug.WriteLine(image == null || image.Item2 == null ? "Loading image failed." : "Loading image success!");
+
+                if (image != null && image.Item2 != null)
+                    video.ThumbImageSource = image.Item2;
+            }
         }
 
         private static bool VideosMatchByServerAndPlayer(Video v, Video video)
         {
             return v.PlexServerConnection.MachineIdentifier == video.PlexServerConnection.MachineIdentifier && 
                    v.Player.MachineIdentifier == video.Player.MachineIdentifier;
+        }
+
+        public bool IsPlaying(Video video)
+        {
+            lock (_syncObj)
+                return VideosNowPlaying.Contains(video);
         }
     }
 }

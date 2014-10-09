@@ -108,11 +108,7 @@
       <HintPath>..\packages\Portable.BouncyCastle.1.7.0.1\lib\portable-net4+sl5+wp8+win8+wpa81\crypto.dll</HintPath>
     </Reference>
     <Reference Include="JimBobBennett.JimLib">
-      <HintPath>..\packages\JimBobBennett.JimLib.1.0.77\lib\portable-net45+win+wpa81+wp80+MonoAndroid10+MonoTouch10\JimBobBennett.JimLib.dll</HintPath>
-    </Reference>
-    <Reference Include="JimBobBennett.JimLib.Xamarin">
-      <HintPath>..\packages\JimBobBennett.JimLib.Xamarin.1.1.47\lib\portable-net45+win+wpa81+wp80+MonoAndroid10+MonoTouch10\JimBobBennett.JimLib.Xamarin.dll</HintPath>
-      <Private>True</Private>
+      <HintPath>..\..\MobileApps\packages\JimBobBennett.JimLib.1.0.81\lib\portable-net45+win+wpa81+wp80+MonoAndroid10+MonoTouch10\JimBobBennett.JimLib.dll</HintPath>
     </Reference>
     <Reference Include="Newtonsoft.Json">
       <HintPath>..\packages\Newtonsoft.Json.6.0.5\lib\portable-net45+wp80+win8+wpa81\Newtonsoft.Json.dll</HintPath>
@@ -123,6 +119,12 @@
     <Reference Include="Xamarin.Forms.Xaml">
       <HintPath>..\packages\Xamarin.Forms.1.2.3.6257\lib\portable-win+net45+wp80+MonoAndroid10+MonoTouch10\Xamarin.Forms.Xaml.dll</HintPath>
     </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\JimLib.Xamarin\JimLib.Xamarin\JimLib.Xamarin.csproj">
+      <Project>{395a6831-de72-4b65-b3c2-72a4cc248726}</Project>
+      <Name>JimLib.Xamarin</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\Portable\$(TargetFrameworkVersion)\Microsoft.Portable.CSharp.targets" />
   <Import Project="$(SolutionDir)\.nuget\NuGet.targets" Condition="Exists('$(SolutionDir)\.nuget\NuGet.targets')" />

@@ -1,4 +1,5 @@
 ﻿using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using JimBobBennett.JimLib.Extensions;
 using JimBobBennett.JimLib.Xamarin.Network;
@@ -80,39 +81,53 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
             return null;
         }
 
-        public async Task<TvShow> SearchForTvShowAsync(string title, int year, ExternalIds knownSeriesIds, 
+        public async Task<TvShow> SearchForTvShowAsync(string title, ExternalIds knownSeriesIds, 
             int seasonNumber, int episodeNumber)
         {
             // handle cases like Castle (called Castle(2009) on TVDB)
-            var yearPart = " (" + year + ")";
-            if (title.EndsWith(yearPart))
-                title = title.Replace(yearPart, "");
+            // use regex as the year could be episode year and not match the title
+            var strippedTitle = title;
+
+            if (strippedTitle.Length > 7)
+            {
+                var regex = new Regex(@" \(\d\d\d\d\)");
+                if (regex.IsMatch(strippedTitle.Substring(strippedTitle.Length - 8)))
+                    strippedTitle = strippedTitle.Substring(0, strippedTitle.Length - 7);
+            }
 
             var response = await _restConnection.MakeRequestAsync<SearchResults, object>(Method.Get, ResponseType.Json,
-                PlexResources.TmdbBaseUrl, string.Format(PlexResources.TmdbSearchTvShow, title, _apiKey),
+                PlexResources.TmdbBaseUrl, string.Format(PlexResources.TmdbSearchTvShow, strippedTitle, _apiKey),
                 timeout: 30000);
 
             if (response == null || response.ResponseObject == null || !response.ResponseObject.Results.Any())
                 return null;
-
+            
             var results = response.ResponseObject.Results.Where(r => r.Name == title).ToList();
             if (results.Count() == 1)
                 return await GetTvShowAsync(results.Single().Id, seasonNumber, episodeNumber);
 
-            results = results.Where(r => r.FirstAirDate.Contains(year.ToString())).ToList();
-            if (results.Count() == 1)
-                return await GetTvShowAsync(results.Single().Id, seasonNumber, episodeNumber);
+            if (!results.Any())
+            {
+                results = response.ResponseObject.Results.Where(r => r.Name == strippedTitle).ToList();
+                if (results.Count() == 1)
+                    return await GetTvShowAsync(results.Single().Id, seasonNumber, episodeNumber);
 
+                if (!results.Any())
+                    return null;
+            }
+            
             if (knownSeriesIds.ImdbId.IsNullOrEmpty() && knownSeriesIds.TvdbId.IsNullOrEmpty()) return null;
 
             // try matching ids
             foreach (var result in results)
             {
                 var tvShow = await LoadTvShowAsync(result.Id, 10000);
-                if (tvShow.ExternalExternalIds.ImdbId == knownSeriesIds.ImdbId ||
-                    tvShow.ExternalExternalIds.TvdbId == knownSeriesIds.TvdbId)
-                    return (!await LoadCreditsForTvShowAsync(tvShow, seasonNumber, episodeNumber) ||
-                            !await LoadExternalIdsForTvShowAsync(tvShow, seasonNumber, episodeNumber)) ? null : tvShow;
+                if (await LoadExternalIdsForTvShowAsync(tvShow, seasonNumber, episodeNumber))
+                {
+                    if (tvShow.ExternalExternalIds.ImdbId == knownSeriesIds.ImdbId ||
+                        tvShow.ExternalExternalIds.TvdbId == knownSeriesIds.TvdbId)
+                        return (!await LoadCreditsForTvShowAsync(tvShow, seasonNumber, episodeNumber)) ? null : tvShow;
+                }
             }
 
             return null;

@@ -21,13 +21,13 @@ namespace JimBobBennett.RestAndRelaxForPlex.Caches
             _tvdbConnection = tvdbConnection;
         }
 
-        public async Task<Series> GetSeriesAsync(string tvdbId, int seriesNumber, int episodeNumber)
+        public async Task<Series> GetSeriesAsync(string tvdbId, int seriesNumber, int episodeNumber, bool forceRefresh)
         {
             var foundSeries = await _seriesCache.GetOrAddAsync(tvdbId, async s =>
                 {
                     var series = await _tvdbConnection.GetSeriesAsync(s);
                     return (series == null || series.GetEpisode(seriesNumber, episodeNumber) == null) ? null : series;
-                });
+                }, forceRefresh);
 
             if (foundSeries == null || foundSeries.GetEpisode(seriesNumber, episodeNumber) == null)
             {

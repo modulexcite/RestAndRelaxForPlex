@@ -4,6 +4,8 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
+using JimBobBennett.JimLib.Async;
+using JimBobBennett.JimLib.Events;
 using JimBobBennett.RestAndRelaxForPlex.PlexObjects;
 using JimBobBennett.JimLib.Collections;
 using JimBobBennett.JimLib.Xamarin.Network;
@@ -27,7 +29,7 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
 
         private string _username;
         private string _password;
-
+        
         private readonly object _deviceSyncObj = new object();
         private readonly object _tokenSyncObj = new object();
 
@@ -43,30 +45,53 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
             Players = new ReadOnlyObservableCollection<Device>(_players);
         }
 
+        private readonly object _connectSynObj = new object();
+
         public async Task ConnectAsync(string username, string password)
         {
-            if (!IsConnected || _username != username || _password != password)
-            {
-                User = null;
-                _username = username;
-                _password = password;
-
-                try
+            await Task.Run(() =>
                 {
-                    var user = await _restConnection.MakeRequestAsync<PlexUser, string>(Method.Post,
-                        ResponseType.Xml, PlexResources.MyPlexBaseUrl, PlexResources.MyPlexSignIn,
-                        _username, _password, headers: PlexHeaders.CreatePlexRequest());
+                    lock (_connectSynObj)
+                    {
+                        if (ConnectionStatus != MyPlexConnectionStatus.Connected || _username != username || _password != password)
+                        {
+                            ConnectionStatus = MyPlexConnectionStatus.Connecting;
 
-                    User = user.ResponseObject;
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine("Exception connecting to MyPlex" + ex);
-                    User = null;
-                }
-            }
+                            User = null;
+                            _username = username;
+                            _password = password;
 
-            await RefreshContainerAsync();
+                            try
+                            {
+                                var user = AsyncHelper.RunSync(() => _restConnection.MakeRequestAsync<PlexUser, string>(Method.Post,
+                                    ResponseType.Xml, PlexResources.MyPlexBaseUrl, PlexResources.MyPlexSignIn,
+                                    _username, _password, headers: PlexHeaders.CreatePlexRequest()));
+
+                                if (user.ResponseObject != null)
+                                {
+                                    User = user.ResponseObject;
+                                    ConnectionStatus = MyPlexConnectionStatus.Connected;
+                                }
+                                else
+                                    ConnectionStatus = MyPlexConnectionStatus.AuthorizationFailed;
+                            }
+                            catch (Exception ex)
+                            {
+                                ConnectionStatus = MyPlexConnectionStatus.AuthorizationFailed;
+                                Debug.WriteLine("Exception connecting to MyPlex" + ex);
+                                User = null;
+                            }
+                        }
+
+                        AsyncHelper.RunSync(RefreshContainerAsync);
+                    }
+                });
+        }
+
+        public event EventHandler<EventArgs<MyPlexConnectionStatus>> ConnectionStatusChanged
+        {
+            add { WeakEventManager.GetWeakEventManager(this).AddEventHandler("ConnectionStatusChanged", value); }
+            remove { WeakEventManager.GetWeakEventManager(this).RemoveEventHandler("ConnectionStatusChanged", value); }
         }
 
         private Guid _refreshToken;
@@ -138,7 +163,21 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
                 .OrderByDescending(d => d.LastSeenAt).ToList();
         }
 
-        public bool IsConnected { get { return User != null; } }
+        private MyPlexConnectionStatus _connectionStatus;
+
+        public MyPlexConnectionStatus ConnectionStatus
+        {
+            get { return _connectionStatus; }
+            private set
+            {
+                if (_connectionStatus == value) return;
+
+                _connectionStatus = value;
+
+                WeakEventManager.GetWeakEventManager(this).RaiseEvent(this,
+                    new EventArgs<MyPlexConnectionStatus>(ConnectionStatus), "ConnectionStatusChanged");
+            }
+        }
 
         public event EventHandler DevicesUpdated;
 

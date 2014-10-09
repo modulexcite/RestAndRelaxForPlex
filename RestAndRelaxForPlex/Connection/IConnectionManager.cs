@@ -15,7 +15,7 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
         INowPlaying NowPlaying { get; }
         ReadOnlyObservableCollection<ServerConnection> ServerConnections { get; }
 
-        Task PopulateFromExternalSourcesAsync(Video video);
-        Task PopulateFromExternalSourcesAsync(Role role);
+        Task PopulateFromExternalSourcesAsync(Video video, bool forceRefresh);
+        Task PopulateFromExternalSourcesAsync(Role role, bool forceRefresh);
     }
 }

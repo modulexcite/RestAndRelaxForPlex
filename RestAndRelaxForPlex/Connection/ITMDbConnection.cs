@@ -11,7 +11,7 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
 
         Task<Movie> SearchForMovieAsync(string title, int year, ExternalIds knownIds);
 
-        Task<TvShow> SearchForTvShowAsync(string title, int year, ExternalIds knownSeriesIds,
+        Task<TvShow> SearchForTvShowAsync(string title, ExternalIds knownSeriesIds,
             int seasonNumber, int episodeNumber);
 
         Task<Person> GetPersonAsync(string tmdbId);

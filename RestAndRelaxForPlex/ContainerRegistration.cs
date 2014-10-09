@@ -22,6 +22,7 @@ namespace JimBobBennett.RestAndRelaxForPlex
             builder.RegisterType<TmdbCache>().As<ITmdbCache>().SingleInstance();
 
             builder.RegisterType<MyPlexConnection>().As<IMyPlexConnection>().SingleInstance();
+            builder.RegisterType<NowPlaying>().As<INowPlaying>().SingleInstance();
             builder.RegisterType<ConnectionManager>().As<IConnectionManager>().SingleInstance();
         }
     }

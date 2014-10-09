@@ -11,9 +11,9 @@ using Newtonsoft.Json;
 
 namespace JimBobBennett.RestAndRelaxForPlex.Caches
 {
-    public class MovieCacheKey : IEquatable<MovieCacheKey>
+    public class TitleYearExternalIdKey : IEquatable<TitleYearExternalIdKey>
     {
-        public MovieCacheKey(string title, int year, string imdbId, string tvdbId = null)
+        public TitleYearExternalIdKey(string title, int year, string imdbId, string tvdbId = null)
         {
             Title = title;
             ImdbId = imdbId;
@@ -21,7 +21,7 @@ namespace JimBobBennett.RestAndRelaxForPlex.Caches
             Year = year;
         }
 
-        public MovieCacheKey()
+        public TitleYearExternalIdKey()
         {
         }
 
@@ -30,7 +30,7 @@ namespace JimBobBennett.RestAndRelaxForPlex.Caches
         public int Year { get; set; }
         public string TvdbId { get; set; }
 
-        public bool Equals(MovieCacheKey other)
+        public bool Equals(TitleYearExternalIdKey other)
         {
             if (ReferenceEquals(null, other)) return false;
             if (ReferenceEquals(this, other)) return true;
@@ -44,7 +44,7 @@ namespace JimBobBennett.RestAndRelaxForPlex.Caches
         {
             if (ReferenceEquals(null, obj)) return false;
             if (ReferenceEquals(this, obj)) return true;
-            return obj.GetType() == GetType() && Equals((MovieCacheKey) obj);
+            return obj.GetType() == GetType() && Equals((TitleYearExternalIdKey) obj);
         }
 
         public override int GetHashCode()
@@ -59,12 +59,12 @@ namespace JimBobBennett.RestAndRelaxForPlex.Caches
             }
         }
 
-        public static bool operator ==(MovieCacheKey left, MovieCacheKey right)
+        public static bool operator ==(TitleYearExternalIdKey left, TitleYearExternalIdKey right)
         {
             return Equals(left, right);
         }
 
-        public static bool operator !=(MovieCacheKey left, MovieCacheKey right)
+        public static bool operator !=(TitleYearExternalIdKey left, TitleYearExternalIdKey right)
         {
             return !Equals(left, right);
         }
@@ -74,10 +74,10 @@ namespace JimBobBennett.RestAndRelaxForPlex.Caches
     {
         private readonly ITmdbConnection _tmdbConnection;
 
-        private readonly CacheWithFail<MovieCacheKey, Movie> _movieCacheByTitle = new CacheWithFail<MovieCacheKey, Movie>();
+        private readonly CacheWithFail<TitleYearExternalIdKey, Movie> _movieCacheByTitle = new CacheWithFail<TitleYearExternalIdKey, Movie>();
         private readonly CacheWithFail<string, Movie> _movieCache = new CacheWithFail<string, Movie>();
 
-        private readonly CacheWithFail<MovieCacheKey, TvShow> _tvShowCacheByTitle = new CacheWithFail<MovieCacheKey, TvShow>();
+        private readonly CacheWithFail<TitleYearExternalIdKey, TvShow> _tvShowCacheByTitle = new CacheWithFail<TitleYearExternalIdKey, TvShow>();
         private readonly CacheWithFail<string, TvShow> _tvShowCache = new CacheWithFail<string, TvShow>();
 
         private readonly CacheWithFail<string, Person> _peopleCache = new CacheWithFail<string, Person>();
@@ -87,7 +87,7 @@ namespace JimBobBennett.RestAndRelaxForPlex.Caches
             _tmdbConnection = tmdbConnection;
         }
 
-        public async Task<Movie> GetMovieAsync(Video video)
+        public async Task<Movie> GetMovieAsync(Video video, bool forceRefresh)
         {
             Movie movie;
 
@@ -95,11 +95,12 @@ namespace JimBobBennett.RestAndRelaxForPlex.Caches
             {
 
                 movie = await _movieCache.GetOrAddAsync(video.ExternalIds.TmdbId,
-                    async s => await _tmdbConnection.GetMovieAsync(s));
+                    async s => await _tmdbConnection.GetMovieAsync(s), 
+                    forceRefresh);
 
                 if (movie != null)
                 {
-                    _movieCacheByTitle.Add(new MovieCacheKey(video.Title, video.Year, movie.ImdbId), movie);
+                    _movieCacheByTitle.Add(new TitleYearExternalIdKey(video.Title, video.Year, movie.ImdbId), movie);
                     return movie;
                 }
             }
@@ -111,14 +112,16 @@ namespace JimBobBennett.RestAndRelaxForPlex.Caches
                 if (movie != null)
                 {
                     _movieCache.Add(movie.Id, movie);
-                    _movieCacheByTitle.Add(new MovieCacheKey(video.Title, video.Year, movie.ImdbId), movie);
+                    _movieCacheByTitle.Add(new TitleYearExternalIdKey(video.Title, video.Year, movie.ImdbId), movie);
                 }
 
                 return movie;
             }
 
-            var key = new MovieCacheKey(video.Title, video.Year, video.ExternalIds.ImdbId);
-            movie = await _movieCacheByTitle.GetOrAddAsync(key, async s => await _tmdbConnection.SearchForMovieAsync(video.Title, video.Year, video.ExternalIds));
+            var key = new TitleYearExternalIdKey(video.Title, video.Year, video.ExternalIds.ImdbId);
+            movie = await _movieCacheByTitle.GetOrAddAsync(key, 
+                async s => await _tmdbConnection.SearchForMovieAsync(video.Title, video.Year, video.ExternalIds), 
+                forceRefresh);
 
             if (movie != null)
                 _movieCache.Add(movie.Id, movie);
@@ -126,18 +129,19 @@ namespace JimBobBennett.RestAndRelaxForPlex.Caches
             return movie;
         }
 
-        public async Task<TvShow> GetTvShowAsync(Video video)
+        public async Task<TvShow> GetTvShowAsync(Video video, bool forceRefresh)
         {
             TvShow show;
 
             if (!video.ExternalIds.TmdbId.IsNullOrEmpty())
             {
                 show = await _tvShowCache.GetOrAddAsync(video.ExternalIds.TmdbId,
-                    async s => await _tmdbConnection.GetTvShowAsync(s, video.SeasonNumber, video.EpisodeNumber));
+                    async s => await _tmdbConnection.GetTvShowAsync(s, video.SeasonNumber, video.EpisodeNumber), 
+                    forceRefresh);
 
                 if (show != null)
                 {
-                    _tvShowCacheByTitle.Add(new MovieCacheKey(video.Show, video.Year, show.ExternalExternalIds.ImdbId,
+                    _tvShowCacheByTitle.Add(new TitleYearExternalIdKey(video.Show, video.Year, show.ExternalExternalIds.ImdbId,
                         show.ExternalExternalIds.TvdbId),
                         show);
 
@@ -147,23 +151,24 @@ namespace JimBobBennett.RestAndRelaxForPlex.Caches
 
             if (video.ExternalIds.ImdbId.IsNullOrEmpty() && video.ExternalIds.TvdbId.IsNullOrEmpty())
             {
-                show = await _tmdbConnection.SearchForTvShowAsync(video.Show, video.Year, video.ExternalIds,
+                show = await _tmdbConnection.SearchForTvShowAsync(video.Show, video.ExternalIds,
                     video.SeasonNumber, video.EpisodeNumber);
 
                 if (show != null)
                 {
                     _tvShowCache.Add(show.Id, show);
-                    _tvShowCacheByTitle.Add(new MovieCacheKey(video.Show, video.Year, show.ExternalExternalIds.ImdbId,
+                    _tvShowCacheByTitle.Add(new TitleYearExternalIdKey(video.Show, video.Year, show.ExternalExternalIds.ImdbId,
                         show.ExternalExternalIds.TvdbId), show);
                 }
 
                 return show;
             }
 
-            var key = new MovieCacheKey(video.Show, video.Year, video.ExternalIds.ImdbId, video.ExternalIds.TvdbId);
+            var key = new TitleYearExternalIdKey(video.Show, video.Year, video.ExternalIds.ImdbId, video.ExternalIds.TvdbId);
             show = await _tvShowCacheByTitle.GetOrAddAsync(key,
-                async s => await _tmdbConnection.SearchForTvShowAsync(video.Show, video.Year, video.ExternalIds,
-                    video.SeasonNumber, video.EpisodeNumber));
+                async s => await _tmdbConnection.SearchForTvShowAsync(video.Show, video.ExternalIds,
+                    video.SeasonNumber, video.EpisodeNumber), 
+                    forceRefresh);
 
             if (show != null)
                 _tvShowCache.Add(show.Id, show);
@@ -171,9 +176,9 @@ namespace JimBobBennett.RestAndRelaxForPlex.Caches
             return show;
         }
 
-        public async Task<Person> GetPersonAsync(string tmdbId)
+        public async Task<Person> GetPersonAsync(string tmdbId, bool forceRefresh)
         {
-            return await _peopleCache.GetOrAddAsync(tmdbId, async s => await _tmdbConnection.GetPersonAsync(tmdbId));
+            return await _peopleCache.GetOrAddAsync(tmdbId, async s => await _tmdbConnection.GetPersonAsync(tmdbId), forceRefresh);
         }
 
         public string DumpCacheAsJson()

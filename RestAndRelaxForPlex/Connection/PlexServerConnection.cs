@@ -79,7 +79,17 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
         }
 
         public string Platform { get { return MediaContainer != null ? MediaContainer.Platform : string.Empty; } }
-        public string MachineIdentifier { get { return MediaContainer != null ? MediaContainer.MachineIdentifier : string.Empty; } }
+
+        public string MachineIdentifier
+        {
+            get
+            {
+                if (MediaContainer != null)
+                    return MediaContainer.MachineIdentifier;
+
+                return Device != null ? Device.ClientIdentifier : ConnectionUri;
+            }
+        }
 
         public string Name
         {
@@ -121,7 +131,7 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
             ConnectionUri = TidyUrl(uri);
         }
 
-        public async Task ConnectAsync()
+        internal async Task<bool> ConnectAsync()
         {
             if (Device != null)
                 await MakeConnectionAsync(Device.Connections);
@@ -130,6 +140,8 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
 
             if (ConnectionStatus == ConnectionStatus.Connected)
                 await RefreshSessionAsync();
+
+            return ConnectionStatus == ConnectionStatus.Connected;
         }
 
         private static string TidyUrl(string uri)
@@ -145,7 +157,7 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
 
         private async Task MakeConnectionAsync(IEnumerable<PlexObjects.Connection> connections)
         {
-            foreach (var connection in connections.Where(c => c.Uri != "http://:0"))
+            foreach (var connection in connections.Reverse().Where(c => c.Uri != "http://:0"))
             {
                 try
                 {
@@ -174,14 +186,23 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
             _clients.Clear();
         }
 
+        private bool _needsAuth;
+
         private async Task<RestResponse<T>> MakePlexRequestAsync<T, TData>(string uri, string resource) 
             where T : class, new() where TData : class
         {
+            if (_needsAuth)
+            {
+                return await _restConnection.MakeRequestAsync<T, TData>(Method.Get,
+                ResponseType.Xml, uri, resource, headers: PlexHeaders.CreatePlexRequest(User));
+            }
+
             var retVal = await _restConnection.MakeRequestAsync<T, TData>(Method.Get,
                 ResponseType.Xml, uri, resource, headers: PlexHeaders.CreatePlexRequest());
 
             if ((retVal == null || retVal.ResponseObject == null) && User != null)
             {
+                _needsAuth = true;
                 retVal = await _restConnection.MakeRequestAsync<T, TData>(Method.Get,
                 ResponseType.Xml, uri, resource, headers: PlexHeaders.CreatePlexRequest(User));
             }
@@ -193,18 +214,17 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
         {
             var response = await MakePlexRequestAsync<MediaContainer, string>(uri, "/");
 
-            if (response != null && response.ResponseObject != null)
-                ConnectionStatus = ConnectionStatus.Connected;
-            else
+            if (response == null || response.ResponseObject == null)
             {
                 if (response != null && response.StatusCode == 401)
                     ConnectionStatus = ConnectionStatus.NotAuthorized;
                 else
                     ConnectionStatus = ConnectionStatus.NotConnected;
+
+                MediaContainer = null;
+                return false;
             }
             
-            if (response == null) return false;
-
             if (MediaContainer == null)
             {
                 MediaContainer = response.ResponseObject;
@@ -222,6 +242,8 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
                     await RefreshSessionAsync();
                 }
             }
+
+            ConnectionStatus = ConnectionStatus.Connected;
 
             return true;
         }
@@ -297,22 +319,22 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
             return container.ResponseObject != null  ? container.ResponseObject.Servers : new ObservableCollectionEx<Server>();
         }
 
-        public async Task PauseVideoAsync(Video video)
+        public async Task<bool> PauseVideoAsync(Video video)
         {
-            await ChangeClientPlayback(video, PlexResources.ClientPause);
+            return await ChangeClientPlayback(video, PlexResources.ClientPause);
         }
 
-        public async Task PlayVideoAsync(Video video)
+        public async Task<bool> PlayVideoAsync(Video video)
         {
-            await ChangeClientPlayback(video, PlexResources.ClientPlay);
+            return await ChangeClientPlayback(video, PlexResources.ClientPlay);
         }
 
-        public async Task StopVideoAsync(Video video)
+        public async Task<bool> StopVideoAsync(Video video)
         {
-            await ChangeClientPlayback(video, PlexResources.ClientStop);
+            return await ChangeClientPlayback(video, PlexResources.ClientStop);
         }
 
-        private async Task ChangeClientPlayback(Video video, string action)
+        private async Task<bool> ChangeClientPlayback(Video video, string action)
         {
             if (video != null && video.Player != null && video.Player.Client != null)
             {
@@ -325,8 +347,12 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
                     Scheme = "http"
                 };
 
-                await MakePlexRequestAsync<Response, string>(clientUriBuilder.Uri.ToString(), action);
+                var response = await MakePlexRequestAsync<Response, string>(clientUriBuilder.Uri.ToString(), action);
+
+                return response != null && response.StatusCode == 200;
             }
+
+            return false;
         }
     }
 }

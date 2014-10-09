@@ -22,8 +22,8 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
         ReadOnlyObservableCollection<Server> Clients { get; }
         PlexUser User { get; }
 
-        Task PauseVideoAsync(Video video);
-        Task PlayVideoAsync(Video video);
-        Task StopVideoAsync(Video video);
+        Task<bool> PauseVideoAsync(Video video);
+        Task<bool> PlayVideoAsync(Video video);
+        Task<bool> StopVideoAsync(Video video);
     }
 }

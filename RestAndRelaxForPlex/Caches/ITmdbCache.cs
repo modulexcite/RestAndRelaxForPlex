@@ -6,9 +6,9 @@ namespace JimBobBennett.RestAndRelaxForPlex.Caches
 {
     public interface ITmdbCache
     {
-        Task<Movie> GetMovieAsync(Video video);
-        Task<TvShow> GetTvShowAsync(Video video);
-        Task<Person> GetPersonAsync(string tmdbId);
+        Task<Movie> GetMovieAsync(Video video, bool forceRefresh);
+        Task<TvShow> GetTvShowAsync(Video video, bool forceRefresh);
+        Task<Person> GetPersonAsync(string tmdbId, bool forceRefresh);
         string DumpCacheAsJson();
         void LoadCacheFromJson(string json);
     }

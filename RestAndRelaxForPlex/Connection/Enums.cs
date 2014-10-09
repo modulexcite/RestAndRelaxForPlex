@@ -6,4 +6,12 @@
         NotAuthorized,
         Connected
     }
+
+    public enum MyPlexConnectionStatus
+    {
+        NotConnected,
+        Connecting,
+        AuthorizationFailed,
+        Connected
+    }
 }

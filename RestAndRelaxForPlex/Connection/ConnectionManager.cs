@@ -9,7 +9,6 @@ using JimBobBennett.RestAndRelaxForPlex.PlexObjects;
 using JimBobBennett.JimLib.Collections;
 using JimBobBennett.JimLib.Events;
 using JimBobBennett.JimLib.Extensions;
-using JimBobBennett.JimLib.Xamarin.Images;
 using JimBobBennett.JimLib.Xamarin.Network;
 using JimBobBennett.JimLib.Xamarin.Timers;
 using JimBobBennett.RestAndRelaxForPlex.TmdbObjects;
@@ -26,7 +25,6 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
         private readonly ILocalServerDiscovery _localServerDiscovery;
         private readonly IRestConnection _restConnection;
         private readonly IMyPlexConnection _myPlexConnection;
-        private readonly IImageHelper _imageHelper;
         private readonly ITvdbCache _tvdbCache;
         private readonly ITmdbCache _tmdbCache;
 
@@ -41,13 +39,12 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
         private readonly Dictionary<string, PlexServerConnection> _serverConnections = new Dictionary<string, PlexServerConnection>();
 
         public ConnectionManager(ITimer timer, ILocalServerDiscovery localServerDiscovery,
-            IRestConnection restConnection, IMyPlexConnection myPlexConnection,
-            IImageHelper imageHelper, ITvdbCache tvdbCache, ITmdbCache tmdbCache)
+            IRestConnection restConnection, IMyPlexConnection myPlexConnection, ITvdbCache tvdbCache, 
+            ITmdbCache tmdbCache, INowPlaying nowPlaying)
         {
             _timer = timer;
             _restConnection = restConnection;
             _myPlexConnection = myPlexConnection;
-            _imageHelper = imageHelper;
             _tvdbCache = tvdbCache;
             _tmdbCache = tmdbCache;
 
@@ -55,20 +52,14 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
             _localServerDiscovery.ServerDiscovered += LocalServerDiscoveryOnServerDiscovered;
 
             ServerConnections = new ReadOnlyObservableCollection<ServerConnection>(_allServerConnections);
-            _plexServerConnections.CollectionChanged += (s, e) =>
-                {
-                    var toAdd = _plexServerConnections.Select(p => new ServerConnection(p)).ToList();
-                    _allServerConnections.UpdateToMatch(toAdd, sc => sc.Title, (sc1, sc2) =>
-                        {
-                            if (sc1.ConnectionStatus == sc2.ConnectionStatus)
-                                return false;
 
-                            sc1.ConnectionStatus = sc2.ConnectionStatus;
-                            return true;
-                        });
-                };
-
-            NowPlaying = new NowPlaying();
+            NowPlaying = nowPlaying;
+        }
+        
+        private void UpdateConnections()
+        {
+            var toAdd = _plexServerConnections.Select(p => new ServerConnection(p)).ToList();
+            _allServerConnections.UpdateToMatch(toAdd, sc => sc.Key, (sc1, sc2) => sc1.UpdateFrom(sc2));
         }
 
         private async void LocalServerDiscoveryOnServerDiscovered(object sender, EventArgs<string> eventArgs)
@@ -94,7 +85,10 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
             }
 
             if (needRebuild)
+            {
                 await RebuildNowPlaying();
+                UpdateConnections();
+            }
 
             return connection.ConnectionStatus == ConnectionStatus.Connected;
         }
@@ -104,11 +98,38 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
             var connected = await MakeMyPlexConnection(username, password);
             if (connected)
             {
-                foreach (var connection in _plexServerConnections.Where(c => c.ConnectionStatus == ConnectionStatus.NotAuthorized))
+                List<PlexServerConnection> connections;
+                lock (_syncObject)
+                    connections = _plexServerConnections.ToList();
+
+                foreach (var connection in connections)
                 {
+                    var key = connection.MachineIdentifier;
+
                     connection.User = _myPlexConnection.User;
-                    await connection.ConnectAsync();
+
+                    if (connection.ConnectionStatus == ConnectionStatus.NotAuthorized)
+                    {
+                        if (await connection.ConnectAsync())
+                        {
+                            _serverConnections.Remove(key);
+
+                            PlexServerConnection existingConn;
+                            if (_serverConnections.TryGetValue(connection.MachineIdentifier, out existingConn))
+                            {
+                                if (existingConn != connection)
+                                {
+                                    lock (_syncObject)
+                                        _plexServerConnections.Remove(connection);
+                                }
+                            }
+                        }
+                    }
                 }
+
+                UpdateConnections();
+
+                await RebuildNowPlaying();
             }
 
             return connected;
@@ -119,7 +140,7 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
             return await CreatePlexServerConnection(uri);
         }
 
-        public bool IsConnectedToMyPlex { get { return _myPlexConnection.IsConnected; } }
+        public bool IsConnectedToMyPlex { get { return _myPlexConnection.ConnectionStatus == MyPlexConnectionStatus.Connected; } }
 
         private async Task<bool> MakeMyPlexConnection(string username, string password)
         {
@@ -142,7 +163,7 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
 
             await _myPlexConnection.ConnectAsync(username, password);
 
-            if (_myPlexConnection.IsConnected)
+            if (_myPlexConnection.ConnectionStatus == MyPlexConnectionStatus.Connected)
             {
                 var connections = (await _myPlexConnection.CreateServerConnectionsAsync())
                     .Where(s => s.ConnectionStatus == ConnectionStatus.Connected).Select(p => (PlexServerConnection)p).ToList();
@@ -158,11 +179,11 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
                         _myPlexServerConnections.Add(connection);
                     }
                 }
-
-                await RebuildNowPlaying();
             }
 
-            return _myPlexConnection.IsConnected;
+            UpdateConnections();
+
+            return _myPlexConnection.ConnectionStatus == MyPlexConnectionStatus.Connected;
         }
 
         public async Task ConnectAsync()
@@ -173,13 +194,13 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
             {
                 _isPolling = true;
 
-                _timer.StartTimer(TimeSpan.FromSeconds(10), async () =>
+                _timer.StartTimer(TimeSpan.FromSeconds(30), async () =>
                     {
                         await _localServerDiscovery.DiscoverLocalServersAsync(IpAddress, Port);
                         return true;
                     });
 
-                _timer.StartTimer(TimeSpan.FromSeconds(1), async () =>
+                _timer.StartTimer(TimeSpan.FromSeconds(3), async () =>
                     {
                         IList<PlexServerConnection> connections;
                         lock (_syncObject)
@@ -210,7 +231,7 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
                 await RebuildNowPlaying();
 
                 lock (_syncObject)
-                    return NowPlaying.GetVideo(video.PlexServerConnection.MachineIdentifier, video.Player.Key);
+                    return NowPlaying.GetNowPlayingForPlayer(video);
             }
             catch (Exception ex)
             {
@@ -226,7 +247,7 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
             lock (_syncObject)
             {
                 nowPlaying = new List<Video>();
-
+                
                 foreach (var connection in _plexServerConnections)
                 {
                     foreach (var video in connection.NowPlaying.Where(v => v.VideoType != VideoType.Unknown))
@@ -238,19 +259,8 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
                     }
                 }
             }
-           
-            foreach (var video in nowPlaying.Where(v => !v.Thumb.IsNullOrEmpty() &&
-                v.ThumbImageSource == null))
-            {
-                var image = await _imageHelper.GetImageAsync(video.PlexServerConnection.ConnectionUri,
-                    video.VideoImageSource, headers:PlexHeaders.CreatePlexRequest(video.PlexServerConnection.User),
-                    canCache:true);
-
-                if (image != null)
-                    video.ThumbImageSource = image.Item2;
-            }
-
-            ((NowPlaying)NowPlaying).UpdateNowPlaying(nowPlaying);
+            
+            await ((NowPlaying)NowPlaying).UpdateNowPlaying(nowPlaying);
         }
 
         private readonly ObservableCollectionEx<PlexServerConnection> _plexServerConnections = new ObservableCollectionEx<PlexServerConnection>();
@@ -260,7 +270,7 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
         private readonly List<Video> _populatingFromExternal = new List<Video>();
         private readonly object _populatingFromExternalSyncObj = new object();
 
-        public async Task PopulateFromExternalSourcesAsync(Video video)
+        public async Task PopulateFromExternalSourcesAsync(Video video, bool forceRefresh)
         {
             try
             {
@@ -286,14 +296,14 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
                 switch (video.VideoType)
                 {
                     case VideoType.Movie:
-                        await PopulateFromTmdb(video);
+                        await PopulateFromTmdb(video, forceRefresh);
                         break;
                     case VideoType.Episode:
                         var hasTvdb = video.ExternalIds.TvdbId.IsNullOrEmpty();
-                        await PopulateFromTvdb(video);
-                        await PopulateFromTmdb(video);
+                        await PopulateFromTvdb(video, forceRefresh);
+                        await PopulateFromTmdb(video, forceRefresh);
                         if (!hasTvdb && !video.ExternalIds.TvdbId.IsNullOrEmpty())
-                            await PopulateFromTvdb(video);
+                            await PopulateFromTvdb(video, forceRefresh);
                         break;
                 }
             }
@@ -304,24 +314,24 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
             }
         }
 
-        public async Task PopulateFromExternalSourcesAsync(Role role)
+        public async Task PopulateFromExternalSourcesAsync(Role role, bool forceRefresh)
         {
             if (role.ExternalIds.ImdbId.IsNullOrEmpty() &&
                 !role.ExternalIds.TmdbId.IsNullOrEmpty())
             {
-                var person = await _tmdbCache.GetPersonAsync(role.ExternalIds.TmdbId);
+                var person = await _tmdbCache.GetPersonAsync(role.ExternalIds.TmdbId, forceRefresh);
                 if (person != null)
                     role.ExternalIds.ImdbId = person.ImdbId;
             }
         }
 
-        private async Task PopulateFromTmdb(Video video)
+        private async Task PopulateFromTmdb(Video video, bool forceRefresh)
         {
-            if (video.HasBeenPopulatedFromTmdb) return;
+            if (video.HasBeenPopulatedFromTmdb && !forceRefresh) return;
 
             if (video.VideoType == VideoType.Episode)
             {
-                var show = await _tmdbCache.GetTvShowAsync(video);
+                var show = await _tmdbCache.GetTvShowAsync(video, forceRefresh);
 
                 if (show != null)
                 {
@@ -350,7 +360,7 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
             }
             else if (video.VideoType == VideoType.Movie)
             {
-                var movie = await _tmdbCache.GetMovieAsync(video);
+                var movie = await _tmdbCache.GetMovieAsync(video, forceRefresh);
 
                 if (movie != null)
                 {
@@ -415,12 +425,45 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
             if (role.RoleName == character && role.Tag == actor)
                 return true;
 
+            // if the character matches, check the name
+            if (role.RoleName.Equals(character, StringComparison.OrdinalIgnoreCase))
+                if (CompareNameWords(actor, role.Tag)) return true;
+
+            if (role.Tag.Equals(actor, StringComparison.OrdinalIgnoreCase))
+                if (CompareNameWords(character, role.RoleName)) return true;
+
             if (role.Tag == actor && (role.RoleName.Contains(character) || character.Contains(role.RoleName)))
                 return true;
 
             return false;
         }
-        
+
+        private static bool CompareNameWords(string name1, string name2)
+        {
+            // first names can be abbreviated, last names can be changed or middle names can be added/removed
+            var names2 = name2.Split(' ');
+            var names1 = name1.Split(' ');
+
+            if (names2.Length == names1.Length)
+            {
+                var fullMatch = 0;
+                var partialMatch = 0;
+
+                for (var i = 0; i < names2.Length; ++i)
+                {
+                    if (names2[i].Equals(names1[i], StringComparison.OrdinalIgnoreCase))
+                        fullMatch++;
+                    if (names2[i].StartsWith(names1[i], StringComparison.OrdinalIgnoreCase) ||
+                        names1[i].StartsWith(names2[i], StringComparison.OrdinalIgnoreCase))
+                        partialMatch++;
+                }
+
+                if (fullMatch >= names2.Length - 1 && partialMatch <= 1)
+                    return true;
+            }
+            return false;
+        }
+
         private static void MergeRoles(Video video, Series series)
         {
             if (series.Actors == null || !series.Actors.Any())
@@ -454,11 +497,12 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
             }
         }
 
-        private async Task PopulateFromTvdb(Video video)
+        private async Task PopulateFromTvdb(Video video, bool forceRefresh)
         {
-            if (video.HasBeenPopulatedFromTvdb || video.ExternalIds.TvdbId.IsNullOrEmpty()) return;
+            if ((video.HasBeenPopulatedFromTvdb && !forceRefresh) || video.ExternalIds.TvdbId.IsNullOrEmpty()) return;
 
-            var series = await _tvdbCache.GetSeriesAsync(video.ExternalIds.TvdbId, video.SeasonNumber, video.EpisodeNumber);
+            var series = await _tvdbCache.GetSeriesAsync(video.ExternalIds.TvdbId, video.SeasonNumber,
+                video.EpisodeNumber, forceRefresh);
 
             if (series != null)
             {
