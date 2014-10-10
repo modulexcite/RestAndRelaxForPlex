@@ -20,10 +20,11 @@ namespace ConsoleTest
 
             var tvdbConnection = new TvdbConnection(restConnection);
             var tmdbConnection = new TmdbConnection(restConnection, TestConstants.TmdbApiKey);
+            var imageHelper = new ImageHelper(restConnection);
 
             var connectionManager = new ConnectionManager(new Timer(), new LocalServerDiscovery(),
-                restConnection, new MyPlexConnection(restConnection), new ImageHelper(restConnection),
-                new TvdbCache(tvdbConnection), new TmdbCache(tmdbConnection));
+                restConnection, new MyPlexConnection(restConnection),
+                new TvdbCache(tvdbConnection), new TmdbCache(tmdbConnection), new NowPlaying(imageHelper));
             
             Task.Factory.StartNew(async () =>
                 {
@@ -32,10 +33,10 @@ namespace ConsoleTest
                             foreach (var video in connectionManager.NowPlaying.VideosNowPlaying.ToList())
                             {
                                 Console.WriteLine("Loading external data for: " + video.Title);
-                                await connectionManager.PopulateFromExternalSourcesAsync(video);
+                                await connectionManager.PopulateFromExternalSourcesAsync(video, false);
                                 var role = video.Roles.FirstOrDefault();
                                 if (role != null)
-                                    await connectionManager.PopulateFromExternalSourcesAsync(role);
+                                    await connectionManager.PopulateFromExternalSourcesAsync(role, false);
 
                                 WriteVideo(video);
                             }

@@ -122,6 +122,9 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
             foreach (var result in results)
             {
                 var tvShow = await LoadTvShowAsync(result.Id, 10000);
+
+                if (tvShow == null) return null;
+
                 if (await LoadExternalIdsForTvShowAsync(tvShow, seasonNumber, episodeNumber))
                 {
                     if (tvShow.ExternalExternalIds.ImdbId == knownSeriesIds.ImdbId ||

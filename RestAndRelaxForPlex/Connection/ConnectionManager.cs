@@ -186,17 +186,35 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
             return _myPlexConnection.ConnectionStatus == MyPlexConnectionStatus.Connected;
         }
 
+        private async Task CheckForNewMyPlexConnectionsAsync()
+        {
+            var connections = (await _myPlexConnection.CreateServerConnectionsAsync())
+                .Where(s => s.ConnectionStatus == ConnectionStatus.Connected).Select(p => (PlexServerConnection) p).ToList();
+
+            lock (_syncObject)
+            {
+                foreach (var connection in connections.Where(c => !_myPlexServerConnections.Contains(c)))
+                {
+                    _serverConnections.Add(connection.MachineIdentifier, connection);
+                    _plexServerConnections.Add(connection);
+                    _myPlexServerConnections.Add(connection);
+                }
+            }
+
+            UpdateConnections();
+        }
+
         public async Task ConnectAsync()
         {
-            await _localServerDiscovery.DiscoverLocalServersAsync(IpAddress, Port);
-            
+            await PollForNewConnectionsAsync();
+
             if (!_isPolling)
             {
                 _isPolling = true;
 
                 _timer.StartTimer(TimeSpan.FromSeconds(30), async () =>
                     {
-                        await _localServerDiscovery.DiscoverLocalServersAsync(IpAddress, Port);
+                        await PollForNewConnectionsAsync();
                         return true;
                     });
 
@@ -220,6 +238,12 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
                         return true;
                     });
             }
+        }
+
+        private async Task PollForNewConnectionsAsync()
+        {
+            await _localServerDiscovery.DiscoverLocalServersAsync(IpAddress, Port);
+            await CheckForNewMyPlexConnectionsAsync();
         }
 
         public async Task<Video> RefreshVideoAsync(Video video)

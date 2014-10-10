@@ -187,6 +187,8 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
             if (handler != null) handler(this, EventArgs.Empty);
         }
 
+        private readonly Dictionary<string, PlexServerConnection> _serverConnections = new Dictionary<string, PlexServerConnection>();
+
         public async Task<IEnumerable<IPlexServerConnection>> CreateServerConnectionsAsync()
         {
             var serverConnections = new List<IPlexServerConnection>();
@@ -196,10 +198,26 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
             lock (_deviceSyncObj)
                 servers = Servers.ToList();
 
-            foreach (var connection in servers.Select(s => new PlexServerConnection(_restConnection, s, User)))
+            foreach (var device in servers)
             {
-                await connection.ConnectAsync();
+                PlexServerConnection connection;
+
+                lock (_deviceSyncObj)
+                {
+                    if (!_serverConnections.TryGetValue(device.Key, out connection))
+                    {
+                        connection = new PlexServerConnection(_restConnection, device, User);
+                        _serverConnections.Add(device.Key, connection);
+                    }
+                }
+
                 serverConnections.Add(connection);
+
+                if (connection.User == null && User != null)
+                    connection.User = User;
+
+                if (connection.ConnectionStatus != Connection.ConnectionStatus.Connected)
+                    await connection.ConnectAsync();
             }
 
             return serverConnections;
