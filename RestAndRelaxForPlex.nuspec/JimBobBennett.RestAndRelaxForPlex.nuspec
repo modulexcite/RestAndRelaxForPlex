@@ -16,7 +16,7 @@
     <tags>plex, api, pcl, windows phone, winphone, wp8, winrt, android, xamarin.forms, ios, monoandroid, monodroid, monotouch</tags>
     <dependencies>
       <group>
-        <dependency id="JimBobBennett.JimLib.Xamarin" version="1.1.52" />
+        <dependency id="JimBobBennett.JimLib.Xamarin" version="1.1.65" />
       </group>
     </dependencies>
   </metadata>

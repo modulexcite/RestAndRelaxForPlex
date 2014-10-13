@@ -46,15 +46,15 @@
     </Reference>
     <Reference Include="JimBobBennett.JimLib.Xamarin, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\JimBobBennett.JimLib.Xamarin.1.1.52\lib\net45\JimBobBennett.JimLib.Xamarin.dll</HintPath>
+      <HintPath>..\packages\JimBobBennett.JimLib.Xamarin.1.1.65\lib\net45\JimBobBennett.JimLib.Xamarin.dll</HintPath>
     </Reference>
-    <Reference Include="JimBobBennett.JimLib.Xamarin.Net45, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\JimBobBennett.JimLib.Xamarin.1.1.52\lib\net45\JimBobBennett.JimLib.Xamarin.Net45.dll</HintPath>
+    <Reference Include="JimBobBennett.JimLib.Xamarin.Net45">
+      <HintPath>..\packages\JimBobBennett.JimLib.Xamarin.1.1.65\lib\net45\JimBobBennett.JimLib.Xamarin.Net45.dll</HintPath>
+      <Private>True</Private>
     </Reference>
-    <Reference Include="JimBobBennett.JimLib.Xamarin.Win, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\JimBobBennett.JimLib.Xamarin.1.1.52\lib\net45\JimBobBennett.JimLib.Xamarin.Win.dll</HintPath>
+    <Reference Include="JimBobBennett.JimLib.Xamarin.Win">
+      <HintPath>..\packages\JimBobBennett.JimLib.Xamarin.1.1.65\lib\net45\JimBobBennett.JimLib.Xamarin.Win.dll</HintPath>
+      <Private>True</Private>
     </Reference>
     <Reference Include="Newtonsoft.Json, Version=6.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
