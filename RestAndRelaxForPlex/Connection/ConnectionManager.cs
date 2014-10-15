@@ -58,8 +58,11 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
         
         private void UpdateConnections()
         {
-            var toAdd = _plexServerConnections.Select(p => new ServerConnection(p)).ToList();
-            _allServerConnections.UpdateToMatch(toAdd, sc => sc.Key, (sc1, sc2) => sc1.UpdateFrom(sc2));
+            lock (_syncObject)
+            {
+                var toAdd = _plexServerConnections.Select(p => new ServerConnection(p)).ToList();
+                _allServerConnections.UpdateToMatch(toAdd, sc => sc.Key, (sc1, sc2) => sc1.UpdateFrom(sc2));
+            }
         }
 
         private async void LocalServerDiscoveryOnServerDiscovered(object sender, EventArgs<string> eventArgs)
@@ -195,7 +198,14 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
             {
                 foreach (var connection in connections.Where(c => !_myPlexServerConnections.Contains(c)))
                 {
-                    _serverConnections.Add(connection.MachineIdentifier, connection);
+                    PlexServerConnection existingConnection;
+                    if (_serverConnections.TryGetValue(connection.MachineIdentifier, out existingConnection))
+                    {
+                        _plexServerConnections.Remove(existingConnection);
+                        _myPlexServerConnections.Remove(existingConnection);
+                    }
+
+                    _serverConnections[connection.MachineIdentifier] = connection;
                     _plexServerConnections.Add(connection);
                     _myPlexServerConnections.Add(connection);
                 }
@@ -345,7 +355,7 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
             {
                 var person = await _tmdbCache.GetPersonAsync(role.ExternalIds.TmdbId, forceRefresh);
                 if (person != null)
-                    role.ExternalIds.ImdbId = person.ImdbId;
+                    role.PopulateFromTmdb(person);
             }
         }
 
@@ -403,6 +413,9 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
 
         private static void MergeRoles(Video video, Credits credits)
         {
+            if (video.RolesComeFromTmdb && video.Roles != null && video.Roles.Any())
+                return;
+
             if (credits == null) return;
 
             var tmdbCastMembers = new List<Cast>();
@@ -416,109 +429,57 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
             if (video.Roles == null)
                 video.Roles = new ObservableCollectionEx<Role>();
 
-            var nextId = video.Roles.Any() ? video.Roles.Max(r => r.Id) + 1 : 1;
+            var roles = new List<Role>();
+            var nextId = 0;
 
             foreach (var actor in tmdbCastMembers)
             {
-                var role = video.Roles.FirstOrDefault(r => RoleMatches(r, actor.Character, actor.Name));
-                if (role == null)
+                roles.Add(new Role
                 {
-                    video.Roles.Add(new Role
-                    {
-                        Id = nextId,
-                        RoleName = actor.Character,
-                        Tag = actor.Name,
-                        Thumb = actor.ProfilePath,
-                        ExternalIds = new ExternalIds {TmdbId = actor.Id}
-                    });
+                    Id = nextId,
+                    RoleName = actor.Character,
+                    Tag = actor.Name,
+                    Thumb = actor.ProfilePath,
+                    ExternalIds = new ExternalIds {TmdbId = actor.Id}
+                });
 
-                    nextId++;
-                }
-                else
-                {
-                    if (role.Thumb == null)
-                        role.Thumb = actor.ProfilePath;
-                    if (role.ExternalIds.TmdbId.IsNullOrEmpty())
-                        role.ExternalIds.TmdbId = actor.Id;
-                }
+                nextId++;
             }
-        }
 
-        private static bool RoleMatches(Role role, string character, string actor)
-        {
-            if (role.RoleName == character && role.Tag == actor)
-                return true;
-
-            // if the character matches, check the name
-            if (role.RoleName.Equals(character, StringComparison.OrdinalIgnoreCase))
-                if (CompareNameWords(actor, role.Tag)) return true;
-
-            if (role.Tag.Equals(actor, StringComparison.OrdinalIgnoreCase))
-                if (CompareNameWords(character, role.RoleName)) return true;
-
-            if (role.Tag == actor && (role.RoleName.Contains(character) || character.Contains(role.RoleName)))
-                return true;
-
-            return false;
-        }
-
-        private static bool CompareNameWords(string name1, string name2)
-        {
-            // first names can be abbreviated, last names can be changed or middle names can be added/removed
-            var names2 = name2.Split(' ');
-            var names1 = name1.Split(' ');
-
-            if (names2.Length == names1.Length)
-            {
-                var fullMatch = 0;
-                var partialMatch = 0;
-
-                for (var i = 0; i < names2.Length; ++i)
-                {
-                    if (names2[i].Equals(names1[i], StringComparison.OrdinalIgnoreCase))
-                        fullMatch++;
-                    if (names2[i].StartsWith(names1[i], StringComparison.OrdinalIgnoreCase) ||
-                        names1[i].StartsWith(names2[i], StringComparison.OrdinalIgnoreCase))
-                        partialMatch++;
-                }
-
-                if (fullMatch >= names2.Length - 1 && partialMatch <= 1)
-                    return true;
-            }
-            return false;
+            video.Roles.ClearAndAddRange(roles);
+            video.RolesComeFromTmdb = true;
         }
 
         private static void MergeRoles(Video video, Series series)
         {
+            if ((video.RolesComeFromTvdb || video.RolesComeFromTmdb) && video.Roles != null && video.Roles.Any())
+                return;
+            
             if (series.Actors == null || !series.Actors.Any())
                 return;
+            
+            if (video.Roles == null)
+                video.Roles = new ObservableCollectionEx<Role>();
 
-            var nextId = video.Roles.Any() ? video.Roles.Max(r => r.Id) + 1 : 1;
+            var roles = new List<Role>();
+            var nextId = 0;
 
             foreach (var actor in series.Actors)
             {
-                var role = video.Roles.FirstOrDefault(r => RoleMatches(r, actor.Role, actor.Name));
-                if (role == null)
+                roles.Add(new Role
                 {
-                    video.Roles.Add(new Role
-                    {
-                        Id = nextId,
-                        RoleName = actor.Role,
-                        Tag = actor.Name,
-                        Thumb = actor.Image,
-                        ExternalIds = new ExternalIds {TvdbId = actor.Id}
-                    });
+                    Id = nextId,
+                    RoleName = actor.Role,
+                    Tag = actor.Name,
+                    Thumb = actor.Image,
+                    ExternalIds = new ExternalIds { TvdbId = actor.Id }
+                });
 
-                    nextId++;
-                }
-                else
-                {
-                    if (role.Thumb == null)
-                        role.Thumb = actor.Image;
-                    if (role.ExternalIds.TvdbId.IsNullOrEmpty())
-                        role.ExternalIds.TvdbId = actor.Id;
-                }
+                nextId++;
             }
+
+            video.Roles.ClearAndAddRange(roles);
+            video.RolesComeFromTvdb = true;
         }
 
         private async Task PopulateFromTvdb(Video video, bool forceRefresh)

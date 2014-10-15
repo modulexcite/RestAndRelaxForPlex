@@ -171,6 +171,24 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
             }
         }
 
+        private static void PopulateImagePaths(PersonCredits credits)
+        {
+            if (credits != null)
+            {
+                if (credits.Cast != null)
+                {
+                    foreach (var cast in credits.Cast.Where(c => !c.Thumb.IsNullOrEmpty()))
+                        cast.Thumb = PlexResources.TmdbActorImageRoot + cast.Thumb;
+                }
+
+                if (credits.Crew != null)
+                {
+                    foreach (var cast in credits.Crew.Where(c => !c.Thumb.IsNullOrEmpty()))
+                        cast.Thumb = PlexResources.TmdbActorImageRoot + cast.Thumb;
+                }
+            }
+        }
+
         private async Task<bool> LoadCreditsForTvShowAsync(TvShow tvShow, int seasonNumber, int episodeNumber)
         {
             var response = await _restConnection.MakeRequestAsync<Credits, object>(Method.Get,
@@ -218,7 +236,20 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
                 PlexResources.TmdbBaseUrl, string.Format(PlexResources.TmdbPerson, tmdbId, _apiKey),
                 timeout: 30000);
 
-            return response == null ? null : response.ResponseObject;
+            if (response == null || response.ResponseObject == null) return null;
+
+            var creditsResponse = await _restConnection.MakeRequestAsync<PersonCredits, object>(Method.Get, ResponseType.Json,
+                PlexResources.TmdbBaseUrl, string.Format(PlexResources.TmdbPersonCredits, tmdbId, _apiKey),
+                timeout: 30000);
+
+            if (creditsResponse == null || creditsResponse.ResponseObject == null) return null;
+
+            var person = response.ResponseObject;
+            person.Credits = creditsResponse.ResponseObject;
+
+            PopulateImagePaths(person.Credits);
+
+            return person;
         }
     }
 }

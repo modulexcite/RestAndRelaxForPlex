@@ -443,5 +443,8 @@ namespace JimBobBennett.RestAndRelaxForPlex.PlexObjects
 
         internal bool HasBeenPopulatedFromTvdb { get; set; }
         internal bool HasBeenPopulatedFromTmdb { get; set; }
+
+        internal bool RolesComeFromTvdb { get; set; }
+        internal bool RolesComeFromTmdb { get; set; }
     }
 }

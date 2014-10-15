@@ -159,10 +159,10 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
                     video.VideoImageSource, headers: PlexHeaders.CreatePlexRequest(video.PlexServerConnection.User),
                     canCache: true);
 
-                Debug.WriteLine(image == null || image.Item2 == null ? "Loading image failed." : "Loading image success!");
+                Debug.WriteLine(image == null ? "Loading image failed." : "Loading image success!");
 
-                if (image != null && image.Item2 != null)
-                    video.ThumbImageSource = image.Item2;
+                if (image != null)
+                    video.ThumbImageSource = image;
             }
         }
 

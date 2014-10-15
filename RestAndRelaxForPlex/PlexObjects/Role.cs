@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using JimBobBennett.JimLib.Extensions;
 using JimBobBennett.JimLib.Xml;
+using JimBobBennett.RestAndRelaxForPlex.TmdbObjects;
 
 namespace JimBobBennett.RestAndRelaxForPlex.PlexObjects
 {
@@ -10,10 +12,20 @@ namespace JimBobBennett.RestAndRelaxForPlex.PlexObjects
         public Role()
         {
             ExternalIds = new ExternalIds();
+            CastCredits = new List<ICastCrewCredit>();
+            CrewCredits = new List<ICastCrewCredit>();
         }
 
         [XmlNameMapping("Role")]
         public string RoleName { get; set; }
+
+        public string Summary { get; set; }
+        public string BirthDay { get; set; }
+        public string DeathDay { get; set; }
+        public string PlaceofBirth { get; set; }
+
+        public List<ICastCrewCredit> CastCredits { get; set; }
+        public List<ICastCrewCredit> CrewCredits { get; set; }
 
         public string Thumb { get; set; }
 
@@ -66,6 +78,18 @@ namespace JimBobBennett.RestAndRelaxForPlex.PlexObjects
             isUpdated = UpdateValue(() => Thumb, newValue, updatedPropertyNames) | isUpdated;
 
             return isUpdated;
+        }
+
+        public void PopulateFromTmdb(Person person)
+        {
+            ExternalIds.ImdbId = person.ImdbId;
+            Summary = person.Summary;
+            BirthDay = person.BirthDay;
+            DeathDay = person.DeathDay;
+            PlaceofBirth = person.PlaceofBirth;
+
+            CastCredits = person.Credits.Cast == null ? new List<ICastCrewCredit>() : person.Credits.Cast.OfType<ICastCrewCredit>().ToList();
+            CrewCredits = person.Credits.Crew == null ? new List<ICastCrewCredit>() : person.Credits.Crew.OfType<ICastCrewCredit>().ToList();
         }
     }
 }

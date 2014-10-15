@@ -25,6 +25,7 @@
         public const string TmdbActorImageRoot = "http://image.tmdb.org/t/p/original";
         public const string TmdbMovie = "3/movie/{0}?api_key={1}";
         public const string TmdbPerson = "3/person/{0}?api_key={1}";
+        public const string TmdbPersonCredits = "3/person/{0}/combined_credits?api_key={1}";
         public const string TmdbPersonUrl = "https://www.themoviedb.org/person/{0}";
         public const string TmdbCredits = "3/movie/{0}/credits?api_key={1}";
         public const string TmdbSearchMovie = "/3/search/movie?query={0}&include_adult=true&year={1}&api_key={2}";

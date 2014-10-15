@@ -34,11 +34,17 @@ namespace ConsoleTest
                             {
                                 Console.WriteLine("Loading external data for: " + video.Title);
                                 await connectionManager.PopulateFromExternalSourcesAsync(video, false);
-                                var role = video.Roles.FirstOrDefault();
-                                if (role != null)
-                                    await connectionManager.PopulateFromExternalSourcesAsync(role, false);
 
                                 WriteVideo(video);
+
+                                var role = video.Roles.FirstOrDefault();
+                                if (role != null)
+                                {
+                                    await connectionManager.PopulateFromExternalSourcesAsync(role, false);
+                                    Console.WriteLine(role.Tag + " starred in " + role.CastCredits.Count);
+                                    if (role.CastCredits.Any())
+                                        Console.WriteLine("  " + role.CastCredits[0].Title + " (" + role.CastCredits[0].Role + ") " + role.CastCredits[0].ReleaseDate.Year);
+                                }
                             }
                         };
 
