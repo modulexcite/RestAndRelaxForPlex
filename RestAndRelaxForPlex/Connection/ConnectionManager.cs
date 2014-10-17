@@ -389,6 +389,12 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
 
                     MergeRoles(video, show.Credits);
 
+                    if (video.Summary.IsNullOrEmpty())
+                        video.Summary = show.Summary;
+
+                    if (video.OriginallyAvailableAt.IsNullOrEmpty())
+                        video.OriginallyAvailableAt = show.AirDate;
+
                     video.HasBeenPopulatedFromTmdb = true;
                 }
             }
@@ -403,6 +409,9 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
 
                     if (video.ExternalIds.TmdbId.IsNullOrEmpty())
                         video.ExternalIds.TmdbId = movie.Id;
+
+                    if (video.Summary.IsNullOrEmpty())
+                        video.Summary = movie.Summary;
 
                     MergeRoles(video, movie.Credits);
 

@@ -164,6 +164,21 @@ namespace JimBobBennett.RestAndRelaxForPlex.Connection
                 if (image != null)
                     video.ThumbImageSource = image;
             }
+
+            if (!video.Art.IsNullOrEmpty() && video.ArtImageSource == null)
+            {
+                Debug.WriteLine("Loading image for " + video.Title + " from " + video.Art + " with token " +
+                    video.PlexServerConnection.User.AuthenticationToken);
+
+                var image = await _imageHelper.GetImageAsync(video.PlexServerConnection.ConnectionUri,
+                    video.Art, headers: PlexHeaders.CreatePlexRequest(video.PlexServerConnection.User),
+                    canCache: true);
+
+                Debug.WriteLine(image == null ? "Loading image failed." : "Loading image success!");
+
+                if (image != null)
+                    video.ArtImageSource = image;
+            }
         }
 
         private static bool VideosMatchByServerAndPlayer(Video v, Video video)

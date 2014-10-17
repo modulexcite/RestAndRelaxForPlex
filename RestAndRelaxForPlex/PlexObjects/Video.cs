@@ -34,6 +34,7 @@ namespace JimBobBennett.RestAndRelaxForPlex.PlexObjects
         private double _viewOffset;
         private User _user;
         private ImageSource _thumbImageSource;
+        private ImageSource _artImageSource;
 
         [NotifyPropertyChangeDependency("Key")]
         public string Guid
@@ -406,6 +407,18 @@ namespace JimBobBennett.RestAndRelaxForPlex.PlexObjects
                 if (_thumbImageSource == value) return;
 
                 _thumbImageSource = value;
+                RaisePropertyChanged();
+            }
+        }
+
+        public ImageSource ArtImageSource
+        {
+            get { return _artImageSource; }
+            internal set
+            {
+                if (_artImageSource == value) return;
+
+                _artImageSource = value;
                 RaisePropertyChanged();
             }
         }

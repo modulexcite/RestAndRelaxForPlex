@@ -1,5 +1,4 @@
-﻿using JimBobBennett.JimLib.Extensions;
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 
 namespace JimBobBennett.RestAndRelaxForPlex.TmdbObjects
 {
@@ -12,6 +11,12 @@ namespace JimBobBennett.RestAndRelaxForPlex.TmdbObjects
 
         [JsonProperty("first_air_date")]
         public string FirstAirDate { get; set; }
+
+        [JsonProperty("air_date")]
+        public string AirDate { get; set; }
+
+        [JsonProperty("overview")]
+        public string Summary { get; set; }
 
         public TmdbExternalIds ExternalExternalIds { get; set; }
         public TmdbExternalIds EpisodeExternalIds { get; set; }
