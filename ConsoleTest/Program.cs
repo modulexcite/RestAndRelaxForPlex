@@ -2,13 +2,13 @@
 using System.Collections.Specialized;
 using System.Linq;
 using System.Threading.Tasks;
+using JimBobBennett.JimLib.Network;
 using JimBobBennett.RestAndRelaxForPlex.Caches;
 using JimBobBennett.RestAndRelaxForPlex.Connection;
 using JimBobBennett.RestAndRelaxForPlex.PlexObjects;
 using JimBobBennett.JimLib.Xamarin.Net45.Images;
 using JimBobBennett.JimLib.Xamarin.Network;
 using JimBobBennett.JimLib.Xamarin.Timers;
-using JimBobBennett.JimLib.Xamarin.Win.Network;
 
 namespace ConsoleTest
 {
@@ -19,7 +19,7 @@ namespace ConsoleTest
             var restConnection = new RestConnection();
 
             var tvdbConnection = new TvdbConnection(restConnection);
-            var tmdbConnection = new TmdbConnection(restConnection, TestConstants.TmdbApiKey);
+            var tmdbConnection = new TmdbConnection(restConnection, TestConstants.TMDbApiKey);
             var imageHelper = new ImageHelper(restConnection);
 
             var connectionManager = new ConnectionManager(new Timer(), new LocalServerDiscovery(),

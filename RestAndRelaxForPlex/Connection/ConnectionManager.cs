@@ -9,6 +9,7 @@ using JimBobBennett.RestAndRelaxForPlex.PlexObjects;
 using JimBobBennett.JimLib.Collections;
 using JimBobBennett.JimLib.Events;
 using JimBobBennett.JimLib.Extensions;
+using JimBobBennett.JimLib.Network;
 using JimBobBennett.JimLib.Xamarin.Network;
 using JimBobBennett.JimLib.Xamarin.Timers;
 using JimBobBennett.RestAndRelaxForPlex.TmdbObjects;

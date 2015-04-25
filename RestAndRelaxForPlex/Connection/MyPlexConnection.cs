@@ -8,7 +8,7 @@ using JimBobBennett.JimLib.Async;
 using JimBobBennett.JimLib.Events;
 using JimBobBennett.RestAndRelaxForPlex.PlexObjects;
 using JimBobBennett.JimLib.Collections;
-using JimBobBennett.JimLib.Xamarin.Network;
+using JimBobBennett.JimLib.Network;
 
 namespace JimBobBennett.RestAndRelaxForPlex.Connection
 {

@@ -2,7 +2,7 @@
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using JimBobBennett.JimLib.Extensions;
-using JimBobBennett.JimLib.Xamarin.Network;
+using JimBobBennett.JimLib.Network;
 using JimBobBennett.RestAndRelaxForPlex.PlexObjects;
 using JimBobBennett.RestAndRelaxForPlex.TmdbObjects;
 

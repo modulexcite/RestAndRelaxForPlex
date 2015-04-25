@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using Autofac;
 using Autofac.Core;
-using JimBobBennett.JimLib.Xamarin.Network;
+using JimBobBennett.JimLib.Network;
 using JimBobBennett.RestAndRelaxForPlex.Caches;
 using JimBobBennett.RestAndRelaxForPlex.Connection;
 

@@ -1,7 +1,7 @@
 ﻿using System.Linq;
 using System.Threading.Tasks;
+using JimBobBennett.JimLib.Network;
 using JimBobBennett.RestAndRelaxForPlex.TvdbObjects;
-using JimBobBennett.JimLib.Xamarin.Network;
 
 namespace JimBobBennett.RestAndRelaxForPlex.Connection
 {
