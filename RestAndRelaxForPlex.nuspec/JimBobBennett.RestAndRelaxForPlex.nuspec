@@ -2,7 +2,7 @@
 <package >
   <metadata minClientVersion="2.7.2">
     <id>JimBobBennett.RestAndRelaxForPlex</id>
-    <version>1.6.35</version>
+    <version>$version$</version>
     <title>RestAndRelax Plex Media Server API</title>
     <authors>Jim Bennett</authors>
     <owners>Jim Bennett</owners>
